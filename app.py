@@ -328,11 +328,12 @@ def toggle_skill(uid, skid):
     return jsonify({"achieved": new_state})
 
 
-# ──────────────────────────────────────────────────────────────────────
+# ── Initialization (runs for both local and production) ───────────────
+
+init_db()
+seed_sample_data()
 
 if __name__ == "__main__":
-    init_db()
-    seed_sample_data()
     import logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
