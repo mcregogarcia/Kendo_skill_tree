@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Kendo Skill Tree</title>
+<style>
+/* ── Reset & Base ───────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d9;overflow:hidden;height:100vh;height:100dvh;display:flex}
+::selection{background:#264f78}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#161b22}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+
+/* ── Sidebar ────────────────────────────────────────── */
+#sidebar{width:300px;min-width:300px;background:#161b22;border-right:1px solid #30363d;
+  padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;z-index:50;
+  transition:transform .3s ease}
+#sidebar h1{font-size:18px;color:#e6edf3;text-align:center;padding:8px 0;
+  border-bottom:1px solid #30363d;margin-bottom:4px}
+.section{background:#21262d;border-radius:8px;padding:12px;border:1px solid #30363d}
+.section h3{font-size:11px;text-transform:uppercase;color:#8b949e;
+  margin-bottom:8px;letter-spacing:1.2px;font-weight:600}
+
+/* ── Mobile drawer ──────────────────────────────────── */
+#menu-toggle{display:none;position:fixed;top:10px;left:10px;z-index:100;
+  background:#161b22;border:1px solid #30363d;color:#c9d1d9;border-radius:8px;
+  padding:8px 12px;font-size:18px;cursor:pointer}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:#00000066;z-index:40}
+
+@media(max-width:768px){
+  #menu-toggle{display:block}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);width:85vw;max-width:340px}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar-overlay.open{display:block}
+  body{flex-direction:column}
+}
+
+/* ── Buttons ────────────────────────────────────────── */
+.btn{border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;
+  transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-primary{background:#238636;color:#fff}.btn-primary:hover{background:#2ea043}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn-secondary:hover{background:#30363d}
+.btn-danger{background:#da3633;color:#fff}.btn-danger:hover{background:#f85149}
+.btn-discord{background:#5865F2;color:#fff;padding:8px 16px;font-size:14px;border-radius:8px;width:100%}
+.btn-discord:hover{background:#4752C4}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+
+/* ── Skillset buttons ───────────────────────────────── */
+.btn-ss{background:#30363d;color:#8b949e;border:1px solid #444c56;border-radius:6px;
+  padding:6px 14px;font-size:13px;cursor:pointer;transition:all .15s;font-family:inherit}
+.btn-ss:hover{background:#3a424b;color:#c9d1d9}
+.btn-ss.active{background:#1f6feb;color:#fff;border-color:#1f6feb;box-shadow:0 0 8px #1f6feb55}
+#ss-btns{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ── Tab bar ────────────────────────────────────────── */
+.tab-bar{display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid #30363d;padding-bottom:6px}
+.tab-btn{background:none;border:none;color:#8b949e;font-size:12px;padding:4px 10px;cursor:pointer;
+  border-radius:6px 6px 0 0;font-family:inherit;transition:all .15s}
+.tab-btn:hover{color:#c9d1d9}
+.tab-btn.active{color:#e6edf3;background:#21262d;border-bottom:2px solid #1f6feb}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* ── Select ─────────────────────────────────────────── */
+select{width:100%;padding:6px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;
+  border-radius:6px;font-size:13px;font-family:inherit}
+select:focus{outline:none;border-color:#1f6feb}
+
+/* ── Edit Tools ─────────────────────────────────────── */
+#edit-tools{display:none}
+.edit-active #edit-tools{display:block}
+
+/* ── Toggle switch ──────────────────────────────────── */
+.toggle{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px}
+.toggle input{display:none}
+.toggle .slider{width:38px;height:20px;background:#30363d;border-radius:10px;
+  position:relative;transition:.2s}
+.toggle .slider::after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;
+  background:#8b949e;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:#1f6feb}
+.toggle input:checked+.slider::after{transform:translateX(18px);background:#fff}
+
+/* ── User info bar ──────────────────────────────────── */
+.user-info{display:flex;align-items:center;gap:10px}
+.user-info img{width:32px;height:32px;border-radius:50%;border:2px solid #30363d}
+.user-info .uname{font-size:14px;color:#e6edf3;font-weight:600}
+.user-info .urole{font-size:11px;color:#8b949e}
+
+/* ── Detail panel ───────────────────────────────────── */
+#detail{display:none}
+#detail .detail-name{font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:6px}
+#detail .detail-desc{font-size:13px;color:#8b949e;margin-bottom:8px}
+#detail .detail-prereqs{font-size:12px;color:#8b949e;margin-bottom:4px}
+#detail .detail-status{font-size:12px;margin-bottom:10px;font-weight:600}
+.status-achieved{color:#ffd700}.status-available{color:#58a6ff}.status-locked{color:#666}
+
+/* ── Legend ──────────────────────────────────────────── */
+.legend-item{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px}
+.legend-dot{width:12px;height:12px;border-radius:50%;border:2px solid}
+.legend-dot.locked{background:#1a1a1a;border-color:#484f58}
+.legend-dot.available{background:#1a2332;border-color:#58a6ff}
+.legend-dot.achieved{background:#2d1f00;border-color:#ffd700;box-shadow:0 0 6px #ffd70088}
+
+/* ── Progress bar ───────────────────────────────────── */
+.progress-wrap{background:#0d1117;border-radius:6px;height:18px;overflow:hidden;border:1px solid #30363d}
+.progress-fill{height:100%;background:linear-gradient(90deg,#1f6feb,#ffd700);border-radius:6px;
+  transition:width .4s ease;min-width:0}
+#progress-text{font-size:12px;color:#8b949e;margin-top:4px;text-align:center}
+
+/* ── Team list ──────────────────────────────────────── */
+.team-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.team-card:hover{border-color:#1f6feb}
+.team-card .tc-name{font-size:14px;font-weight:600;color:#e6edf3}
+.team-card .tc-desc{font-size:12px;color:#8b949e;margin-top:2px}
+.member-chip{display:inline-flex;align-items:center;gap:4px;background:#30363d;border-radius:12px;
+  padding:2px 8px 2px 2px;font-size:11px;margin:2px}
+.member-chip img{width:18px;height:18px;border-radius:50%}
+
+/* ── Session card ───────────────────────────────────── */
+.session-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px;margin-bottom:8px}
+.session-card .sc-title{font-size:14px;font-weight:600;color:#e6edf3}
+.session-card .sc-date{font-size:11px;color:#8b949e}
+.session-card .sc-team{font-size:11px;color:#58a6ff}
+
+/* ── Main area ──────────────────────────────────────── */
+#main{flex:1;position:relative;overflow:hidden}
+#tree-svg{width:100%;height:100%;cursor:grab;display:block;touch-action:none}
+#tree-svg:active{cursor:grabbing}
+#tree-svg.linking{cursor:crosshair}
+
+/* ── Empty state ────────────────────────────────────── */
+#empty-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;color:#484f58;font-size:16px;pointer-events:none}
+
+/* ── Tooltip ────────────────────────────────────────── */
+#tooltip{display:none;position:fixed;background:#21262d;border:1px solid #30363d;
+  border-radius:8px;padding:10px 14px;font-size:13px;line-height:1.5;
+  max-width:260px;pointer-events:none;z-index:100;box-shadow:0 4px 12px #00000088}
+
+/* ── Toast ──────────────────────────────────────────── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  padding:10px 24px;border-radius:8px;font-size:14px;z-index:200;
+  transition:opacity .3s;pointer-events:none;font-weight:500}
+.toast-info{background:#1f6feb;color:#fff}
+.toast-success{background:#238636;color:#fff}
+.toast-warning{background:#9e6a03;color:#fff}
+.toast-error{background:#da3633;color:#fff}
+
+/* ── Modal ──────────────────────────────────────────── */
+#modal-overlay{display:none;position:fixed;inset:0;background:#00000088;z-index:300;
+  align-items:center;justify-content:center}
+#modal{background:#161b22;border:1px solid #30363d;border-radius:12px;
+  width:400px;max-width:92vw;box-shadow:0 8px 24px #00000088}
+#modal-header{display:flex;justify-content:space-between;align-items:center;
+  padding:16px 20px;border-bottom:1px solid #30363d}
+#modal-header h3{font-size:16px;color:#e6edf3}
+#modal-close{background:none;border:none;color:#8b949e;font-size:20px;cursor:pointer;
+  padding:4px 8px;border-radius:4px}
+#modal-body{padding:16px 20px;display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto}
+.modal-field{display:flex;flex-direction:column;gap:4px}
+.modal-field label{font-size:12px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.modal-field input,.modal-field textarea,.modal-field select{padding:8px 10px;background:#0d1117;
+  color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font-size:14px;font-family:inherit}
+.modal-field input:focus,.modal-field textarea:focus{outline:none;border-color:#1f6feb}
+.modal-field input[type="color"]{height:36px;padding:2px;cursor:pointer}
+#modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid #30363d}
+
+/* ── SVG node styles ────────────────────────────────── */
+.skill-node{cursor:pointer;transition:transform .1s}
+.skill-node:hover rect{filter:brightness(1.3)}
+.skill-node.selected rect{stroke-dasharray:6 3;animation:dash .6s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-18}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.connection{pointer-events:none;fill:none}
+.connection.editable{pointer-events:stroke;cursor:pointer;stroke-width:8}
+.connection.editable:hover{stroke:var(--hover-color,#f85149)!important;opacity:.8}
+
+/* ── Heatmap overlay for team view ──────────────────── */
+.heatmap-badge{font-size:10px;font-weight:700;fill:#fff}
+</style>
+</head>
+<body>
+
+<!-- Mobile hamburger -->
+<button id="menu-toggle" onclick="toggleSidebar()">&#9776;</button>
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- ── Sidebar ──────────────────────────────────────── -->
+<div id="sidebar">
+  <h1>&#9876; Kendo Skill Tree</h1>
+
+  <!-- Auth section -->
+  <div class="section" id="auth-section">
+    <div id="logged-out-view">
+      <h3>Account</h3>
+      <a href="/login/discord" class="btn btn-discord" style="text-decoration:none;text-align:center">
+        &#x1F5E8; Login with Discord
+      </a>
+    </div>
+    <div id="logged-in-view" style="display:none">
+      <div class="user-info">
+        <img id="my-avatar" src="" alt="avatar">
+        <div>
+          <div class="uname" id="my-name"></div>
+          <div class="urole" id="my-role"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <a href="/logout" class="btn btn-secondary btn-sm" style="text-decoration:none">Logout</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab navigation -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('tree')">Skill Tree</button>
+    <button class="tab-btn" onclick="switchTab('teams')">Teams</button>
+    <button class="tab-btn" onclick="switchTab('sessions')">Sessions</button>
+  </div>
+
+  <!-- ═══ TREE TAB ═══ -->
+  <div id="tab-tree" class="tab-content active">
+    <!-- User selector (view other users) -->
+    <div class="section">
+      <h3>Viewing User</h3>
+      <select id="user-select" onchange="switchUser()"><option value="">-- Select --</option></select>
+    </div>
+
+    <!-- Skillsets -->
+    <div class="section">
+      <h3>Skill Sets</h3>
+      <div id="ss-btns"></div>
+      <div class="btn-row admin-only" style="margin-top:8px;display:none">
+        <button class="btn btn-primary btn-sm" onclick="addSkillset()">+ New Set</button>
+        <button class="btn btn-danger btn-sm" onclick="removeSkillset()">Remove Set</button>
+      </div>
+    </div>
+
+    <!-- Edit Mode (admin only) -->
+    <div class="section admin-only" style="display:none">
+      <label class="toggle" id="mode-toggle">
+        <input type="checkbox" id="edit-check" onchange="toggleEdit()">
+        <span class="slider"></span>
+        <span>Edit Mode</span>
+      </label>
+      <div id="edit-tools" style="margin-top:10px">
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-sm" onclick="addSkill()">+ Skill</button>
+          <button class="btn btn-secondary btn-sm" id="link-btn" onclick="toggleLink()">&#128279; Link</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-sm" onclick="autoLayout()">&#128208; Layout</button>
+          <button class="btn btn-secondary btn-sm" onclick="fitView()">&#128269; Fit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail -->
+    <div class="section" id="detail">
+      <h3>Selected Skill</h3>
+      <div class="detail-name" id="d-name"></div>
+      <div class="detail-desc" id="d-desc"></div>
+      <div class="detail-prereqs" id="d-prereqs"></div>
+      <div class="detail-status" id="d-status"></div>
+      <div class="btn-row" id="detail-edit-btns" style="display:none">
+        <button class="btn btn-secondary btn-sm" onclick="editSkill()">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSkill()">Delete</button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="section" id="progress-section">
+      <h3>Progress</h3>
+      <div class="progress-wrap"><div class="progress-fill" id="progress-fill" style="width:0"></div></div>
+      <div id="progress-text">0 / 0</div>
+    </div>
+
+    <!-- Legend -->
+    <div class="section">
+      <h3>Legend</h3>
+      <div class="legend-item"><span class="legend-dot locked"></span> Locked</div>
+      <div class="legend-item"><span class="legend-dot available"></span> Available</div>
+      <div class="legend-item"><span class="legend-dot achieved"></span> Achieved</div>
+    </div>
+  </div>
+
+  <!-- ═══ TEAMS TAB ═══ -->
+  <div id="tab-teams" class="tab-content">
+    <div class="section">
+      <h3>My Teams</h3>
+      <div id="teams-list"></div>
+      <div class="btn-row" id="create-team-row">
+        <button class="btn btn-primary btn-sm" onclick="createTeam()">+ Create Team</button>
+      </div>
+    </div>
+    <div class="section" id="team-detail-section" style="display:none">
+      <h3 id="team-detail-name">Team</h3>
+      <div id="team-members-list"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="addMemberToTeam()">+ Add Member</button>
+        <button class="btn btn-secondary btn-sm" onclick="viewTeamProgress()">View Progress</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelectedTeam()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SESSIONS TAB ═══ -->
+  <div id="tab-sessions" class="tab-content">
+    <div class="section">
+      <h3>Training Sessions</h3>
+      <div id="sessions-list"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" onclick="createSession()">+ New Session</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main SVG area ────────────────────────────────── -->
+<div id="main">
+  <svg id="tree-svg">
+    <defs>
+      <marker id="arrow-grey" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6" fill="#484f58"/></marker>
+      <marker id="arrow-gold" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6" fill="#ffd700"/></marker>
+      <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6" fill="#58a6ff"/></marker>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#151b23" stroke-width="0.5"/>
+      </pattern>
+    </defs>
+    <g id="canvas"></g>
+  </svg>
+  <div id="empty-msg">Select a Skill Set to begin</div>
+</div>
+
+<!-- ── Tooltip ──────────────────────────────────────── -->
+<div id="tooltip"></div>
+<!-- ── Toast ────────────────────────────────────────── -->
+<div id="toast"></div>
+<!-- ── Modal ────────────────────────────────────────── -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div id="modal-header">
+      <h3 id="modal-title">Dialog</h3>
+      <button id="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+    <div id="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm" onclick="confirmModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   State
+   ════════════════════════════════════════════════════════ */
+const S = {
+  me: null, // logged-in user {id, name, avatar_url, is_admin}
+  users: [], skillsets: [], skills: [], deps: [], progress: {},
+  userId: null, ssId: null,
+  edit: false, linking: false, linkSrc: null, selected: null,
+  teams: [], selectedTeam: null, sessions: [],
+  teamProgressData: null // for heatmap overlay
+};
+
+/* ════════════════════════════════════════════════════════
+   Mobile sidebar
+   ════════════════════════════════════════════════════════ */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+
+/* ════════════════════════════════════════════════════════
+   Tabs
+   ════════════════════════════════════════════════════════ */
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name === 'teams') loadTeams();
+  if (name === 'sessions') loadSessions();
+}
+
+/* ════════════════════════════════════════════════════════
+   SVG Helpers
+   ════════════════════════════════════════════════════════ */
+const NS = 'http://www.w3.org/2000/svg';
+const svgEl = () => document.getElementById('tree-svg');
+let vb = {x:-50, y:-20, w:800, h:600};
+let panning = false, panPt = null;
+let dragging = null, dragOff = {x:0,y:0};
+let dragMoved = false;
+
+function el(tag, attrs={}) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+function svgPt(e) {
+  const r = svgEl().getBoundingClientRect();
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  return {x: vb.x + (cx-r.left)/r.width*vb.w, y: vb.y + (cy-r.top)/r.height*vb.h};
+}
+function updateVB() { svgEl().setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+
+/* ════════════════════════════════════════════════════════
+   API Helper
+   ════════════════════════════════════════════════════════ */
+async function api(url, method='GET', body=null) {
+  const opts = {method, headers:{'Content-Type':'application/json'}, credentials:'same-origin'};
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  return res;
+}
+
+/* ════════════════════════════════════════════════════════
+   Auth
+   ════════════════════════════════════════════════════════ */
+async function loadMe() {
+  const r = await api('/api/me');
+  S.me = await r.json();
+  if (S.me) {
+    document.getElementById('logged-out-view').style.display = 'none';
+    document.getElementById('logged-in-view').style.display = 'block';
+    document.getElementById('my-name').textContent = S.me.name;
+    document.getElementById('my-role').textContent = S.me.is_admin ? 'Admin' : 'Member';
+    const av = document.getElementById('my-avatar');
+    av.src = S.me.avatar_url || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22><rect width=%2232%22 height=%2232%22 fill=%22%2330363d%22 rx=%2216%22/><text x=%2216%22 y=%2222%22 text-anchor=%22middle%22 fill=%22%238b949e%22 font-size=%2216%22>' + S.me.name[0] + '</text></svg>';
+    // Show admin-only UI
+    if (S.me.is_admin) {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+    }
+    // Auto-select self
+    S.userId = S.me.id;
+  } else {
+    document.getElementById('logged-out-view').style.display = 'block';
+    document.getElementById('logged-in-view').style.display = 'none';
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   Data Loading
+   ════════════════════════════════════════════════════════ */
+async function loadUsers() {
+  const r = await api('/api/users'); S.users = await r.json();
+  const sel = document.getElementById('user-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- Select --</option>';
+  S.users.forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id; o.textContent = u.name; sel.appendChild(o);
+  });
+  if (S.userId) sel.value = S.userId;
+  else sel.value = cur || '';
+}
+
+async function loadSkillsets() {
+  const r = await api('/api/skillsets'); S.skillsets = await r.json();
+  const wrap = document.getElementById('ss-btns'); wrap.innerHTML = '';
+  S.skillsets.forEach(ss => {
+    const b = document.createElement('button');
+    b.className = 'btn-ss' + (S.ssId === ss.id ? ' active' : '');
+    b.textContent = ss.name;
+    b.onclick = () => switchSkillset(ss.id);
+    wrap.appendChild(b);
+  });
+}
+
+async function loadTree() {
+  if (!S.ssId) { S.skills=[]; S.deps=[]; return; }
+  const r = await api(`/api/skillsets/${S.ssId}/skills`);
+  const d = await r.json(); S.skills = d.skills; S.deps = d.dependencies;
+}
+
+async function loadProgress() {
+  S.progress = {};
+  if (!S.userId) return;
+  const r = await api(`/api/users/${S.userId}/progress`);
+  const d = await r.json();
+  for (const [id, date] of Object.entries(d)) S.progress[parseInt(id)] = date;
+}
+
+/* ════════════════════════════════════════════════════════
+   Status Helpers
+   ════════════════════════════════════════════════════════ */
+function getStatus(id) {
+  if (S.progress[id]) return 'achieved';
+  const myDeps = S.deps.filter(d => d.skill_id === id);
+  if (myDeps.length === 0) return 'available';
+  return myDeps.every(d => S.progress[d.required_skill_id]) ? 'available' : 'locked';
+}
+
+/* ════════════════════════════════════════════════════════
+   Rendering
+   ════════════════════════════════════════════════════════ */
+function render() {
+  const c = document.getElementById('canvas'); c.innerHTML = '';
+  document.getElementById('empty-msg').style.display = S.skills.length ? 'none' : 'block';
+  const bg = el('rect', {x:vb.x-2000, y:vb.y-2000, width:vb.w+4000, height:vb.h+4000, fill:'url(#grid)'});
+  c.appendChild(bg);
+  renderEdges(c);
+  renderNodes(c);
+  updateProgress();
+}
+
+function renderEdges(c) {
+  for (const dep of S.deps) {
+    const from = S.skills.find(s => s.id === dep.required_skill_id);
+    const to = S.skills.find(s => s.id === dep.skill_id);
+    if (!from || !to) continue;
+    const fromA = getStatus(from.id) === 'achieved';
+    const toA = getStatus(to.id) === 'achieved';
+    const bothDone = fromA && toA;
+    const anyDone = fromA || toA;
+    const midY = (from.y_pos + 25 + to.y_pos - 25) / 2;
+    const d = `M ${from.x_pos} ${from.y_pos+25} C ${from.x_pos} ${midY} ${to.x_pos} ${midY} ${to.x_pos} ${to.y_pos-25}`;
+    const stroke = bothDone ? '#ffd700' : anyDone ? '#58a6ff' : '#484f58';
+    const marker = bothDone ? 'url(#arrow-gold)' : anyDone ? 'url(#arrow-blue)' : 'url(#arrow-grey)';
+    const p = el('path', {d, stroke, 'stroke-width': bothDone?2.5:2, fill:'none', 'marker-end':marker, opacity: bothDone?1:anyDone?.8:.5});
+    p.classList.add('connection');
+    if (S.edit) {
+      p.classList.add('editable');
+      p.style.setProperty('--hover-color', '#f85149');
+      p.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Remove link: "${from.name}" → "${to.name}"?`)) {
+          api('/api/dependencies', 'DELETE', {skill_id:dep.skill_id, required_skill_id:dep.required_skill_id}).then(()=>reload());
+        }
+      });
+    }
+    c.appendChild(p);
+  }
+}
+
+function renderNodes(c) {
+  for (const sk of S.skills) {
+    const status = getStatus(sk.id);
+    const g = el('g', {transform:`translate(${sk.x_pos},${sk.y_pos})`});
+    g.classList.add('skill-node');
+    if (S.selected === sk.id) g.classList.add('selected');
+    g.dataset.id = sk.id;
+    const w = Math.max(130, sk.name.length * 8.5 + 30);
+    let fill, strokeCol, sw, filter='';
+    if (status === 'achieved') { fill='#2d1f00'; strokeCol='#ffd700'; sw=3; filter='url(#glow)'; }
+    else if (status === 'available') { fill='#1a2332'; strokeCol = sk.color || '#58a6ff'; sw=2; }
+    else { fill='#1a1a1a'; strokeCol='#484f58'; sw=1.5; }
+    const rect = el('rect', {x:-w/2, y:-25, width:w, height:50, rx:10, fill, stroke:strokeCol, 'stroke-width':sw});
+    if (filter) rect.setAttribute('filter', filter);
+    g.appendChild(rect);
+    const txt = el('text', {'text-anchor':'middle', dy:'5', fill: status==='locked'?'#666':'#e0e0e0', 'font-size':'14', 'font-family':'Segoe UI,system-ui,sans-serif'});
+    txt.textContent = sk.name;
+    g.appendChild(txt);
+    if (status === 'achieved') {
+      const ck = el('text', {x: w/2-14, y:-12, fill:'#ffd700', 'font-size':'14'});
+      ck.textContent = '\u2605';
+      g.appendChild(ck);
+    }
+    // Team heatmap badge
+    if (S.teamProgressData) {
+      const total = S.teamProgressData.length;
+      const achieved = S.teamProgressData.filter(m => m.achieved[String(sk.id)]).length;
+      if (total > 0) {
+        const pct = Math.round(achieved/total*100);
+        const bx = w/2 - 8;
+        const bg = el('rect', {x:bx-14, y:-25, width:28, height:16, rx:8, fill: pct===100?'#238636':pct>50?'#1f6feb':'#da3633', opacity:0.9});
+        g.appendChild(bg);
+        const bt = el('text', {x:bx, y:-13, 'text-anchor':'middle', fill:'#fff', 'font-size':'9', 'font-weight':'700'});
+        bt.textContent = pct+'%';
+        g.appendChild(bt);
+      }
+    }
+    g.addEventListener('mousedown', (e) => onNodeDown(e, sk.id));
+    g.addEventListener('touchstart', (e) => { e.preventDefault(); onNodeDown(e, sk.id); }, {passive:false});
+    g.addEventListener('mouseenter', (e) => showTooltip(e, sk));
+    g.addEventListener('mouseleave', hideTooltip);
+    c.appendChild(g);
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   Zoom & Pan (mouse + touch)
+   ════════════════════════════════════════════════════════ */
+let lastTouchDist = 0, lastTouchMid = null;
+
+function initZoomPan() {
+  const s = svgEl();
+  // Mouse wheel zoom
+  s.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const scale = e.deltaY > 0 ? 1.1 : 0.9;
+    const pt = svgPt(e);
+    vb.x = pt.x - (pt.x - vb.x) * scale;
+    vb.y = pt.y - (pt.y - vb.y) * scale;
+    vb.w *= scale; vb.h *= scale;
+    updateVB(); render();
+  }, {passive:false});
+
+  // Mouse pan
+  s.addEventListener('mousedown', (e) => {
+    if (e.target === s || e.target.closest('#canvas > rect')) {
+      panning = true; panPt = {x:e.clientX, y:e.clientY};
+      s.style.cursor = 'grabbing';
+      S.selected = null; updateDetail();
+    }
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (panning) {
+      const dx = (e.clientX - panPt.x) * vb.w / s.clientWidth;
+      const dy = (e.clientY - panPt.y) * vb.h / s.clientHeight;
+      vb.x -= dx; vb.y -= dy;
+      panPt = {x:e.clientX, y:e.clientY};
+      updateVB(); render();
+    }
+    if (dragging) {
+      dragMoved = true;
+      const pt = svgPt(e);
+      dragging.x_pos = pt.x - dragOff.x;
+      dragging.y_pos = pt.y - dragOff.y;
+      render();
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    if (panning) { panning = false; svgEl().style.cursor = S.linking?'crosshair':'grab'; }
+    if (dragging) {
+      if (!dragMoved) {
+        S.selected = (S.selected === dragging.id) ? null : dragging.id;
+        render(); updateDetail();
+      } else {
+        api(`/api/skills/${dragging.id}`, 'PUT', {x_pos:dragging.x_pos, y_pos:dragging.y_pos});
+      }
+      dragging = null;
+    }
+  });
+
+  // Touch pan + pinch zoom
+  s.addEventListener('touchstart', (e) => {
+    if (e.target === s || e.target.closest('#canvas > rect')) {
+      if (e.touches.length === 1) {
+        panning = true;
+        panPt = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+      } else if (e.touches.length === 2) {
+        panning = false;
+        lastTouchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+        lastTouchMid = {x:(e.touches[0].clientX+e.touches[1].clientX)/2, y:(e.touches[0].clientY+e.touches[1].clientY)/2};
+      }
+    }
+  }, {passive:false});
+
+  s.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      const scale = lastTouchDist / dist;
+      const mid = {clientX:(e.touches[0].clientX+e.touches[1].clientX)/2, clientY:(e.touches[0].clientY+e.touches[1].clientY)/2};
+      const pt = svgPt(mid);
+      vb.x = pt.x - (pt.x - vb.x) * scale;
+      vb.y = pt.y - (pt.y - vb.y) * scale;
+      vb.w *= scale; vb.h *= scale;
+      lastTouchDist = dist;
+      updateVB(); render();
+    } else if (panning && e.touches.length === 1) {
+      const dx = (e.touches[0].clientX - panPt.x) * vb.w / s.clientWidth;
+      const dy = (e.touches[0].clientY - panPt.y) * vb.h / s.clientHeight;
+      vb.x -= dx; vb.y -= dy;
+      panPt = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+      updateVB(); render();
+    }
+    if (dragging && e.touches.length === 1) {
+      dragMoved = true;
+      const pt = svgPt(e);
+      dragging.x_pos = pt.x - dragOff.x;
+      dragging.y_pos = pt.y - dragOff.y;
+      render();
+    }
+  }, {passive:false});
+
+  s.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+      panning = false;
+      if (dragging) {
+        if (!dragMoved) {
+          S.selected = (S.selected === dragging.id) ? null : dragging.id;
+          render(); updateDetail();
+        } else {
+          api(`/api/skills/${dragging.id}`, 'PUT', {x_pos:dragging.x_pos, y_pos:dragging.y_pos});
+        }
+        dragging = null;
+      }
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   Node Interaction
+   ════════════════════════════════════════════════════════ */
+function onNodeDown(e, id) {
+  e.stopPropagation();
+  dragMoved = false;
+  if (S.edit && !S.linking) {
+    const sk = S.skills.find(s => s.id===id);
+    const pt = svgPt(e);
+    dragging = sk; dragOff = {x: pt.x-sk.x_pos, y: pt.y-sk.y_pos};
+    return;
+  }
+  const handler = (ev) => {
+    window.removeEventListener('mouseup', handler);
+    window.removeEventListener('touchend', handler);
+    if (dragMoved) return;
+    onNodeClick(ev, id);
+  };
+  window.addEventListener('mouseup', handler);
+  window.addEventListener('touchend', handler);
+}
+
+function onNodeClick(e, id) {
+  if (S.edit && S.linking) {
+    if (!S.linkSrc) {
+      S.linkSrc = id; S.selected = id; render(); updateDetail();
+      toast('Now click the dependent skill', 'info');
+    } else {
+      if (S.linkSrc !== id) {
+        api('/api/dependencies', 'POST', {skill_id:id, required_skill_id:S.linkSrc}).then(r => {
+          if (r.ok) { toast('Link created!', 'success'); reload(); }
+          else r.json().then(d => toast(d.error||'Error', 'error'));
+        });
+      }
+      S.linkSrc = null;
+    }
+    return;
+  }
+  if (S.edit) {
+    S.selected = (S.selected === id) ? null : id;
+    render(); updateDetail();
+    return;
+  }
+  // Normal mode: toggle achievement
+  S.selected = id; render(); updateDetail();
+  if (!S.me) { toast('Login to track progress', 'warning'); return; }
+  if (!S.userId) { toast('Select a user first', 'warning'); return; }
+  // Only allow toggling own skills (unless admin)
+  if (S.userId !== S.me.id && !S.me.is_admin) { toast('You can only modify your own progress', 'warning'); return; }
+  const status = getStatus(id);
+  if (status === 'locked') { toast('Prerequisites not met!', 'warning'); return; }
+  api(`/api/users/${S.userId}/toggle/${id}`, 'POST').then(r => {
+    if (r.status === 401) { toast('Login required', 'error'); return; }
+    if (r.status === 403) { toast('Not allowed', 'error'); return; }
+    return r.json();
+  }).then(d => {
+    if (!d) return;
+    if (d.achieved) { S.progress[id] = new Date().toISOString(); toast('Skill achieved! \u2605', 'success'); }
+    else { delete S.progress[id]; toast('Skill removed', 'info'); }
+    render(); updateDetail();
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   Sidebar Updates
+   ════════════════════════════════════════════════════════ */
+function updateDetail() {
+  const panel = document.getElementById('detail');
+  const editBtns = document.getElementById('detail-edit-btns');
+  if (!S.selected) { panel.style.display='none'; return; }
+  const sk = S.skills.find(s => s.id === S.selected);
+  if (!sk) { panel.style.display='none'; return; }
+  panel.style.display='block';
+  document.getElementById('d-name').textContent = sk.name;
+  document.getElementById('d-desc').textContent = sk.description || '(no description)';
+  const prereqs = S.deps.filter(d => d.skill_id===sk.id).map(d => {
+    const p = S.skills.find(s => s.id===d.required_skill_id); return p?p.name:'?';
+  });
+  document.getElementById('d-prereqs').textContent = prereqs.length ? 'Requires: '+prereqs.join(', ') : 'No prerequisites';
+  const status = getStatus(sk.id);
+  const statusEl = document.getElementById('d-status');
+  statusEl.textContent = status === 'achieved' ? '\u2605 Achieved' : status === 'available' ? '\u25CB Available' : '\uD83D\uDD12 Locked';
+  statusEl.className = 'detail-status status-' + status;
+  editBtns.style.display = S.edit ? 'flex' : 'none';
+}
+
+function updateProgress() {
+  const total = S.skills.length;
+  const done = S.skills.filter(s => S.progress[s.id]).length;
+  const pct = total ? (done/total*100) : 0;
+  document.getElementById('progress-fill').style.width = pct+'%';
+  document.getElementById('progress-text').textContent = `${done} / ${total}`;
+}
+
+/* ════════════════════════════════════════════════════════
+   Tooltip
+   ════════════════════════════════════════════════════════ */
+function showTooltip(e, sk) {
+  const tip = document.getElementById('tooltip');
+  const prereqs = S.deps.filter(d => d.skill_id===sk.id).map(d => {
+    const p = S.skills.find(s => s.id===d.required_skill_id); return p?p.name:'?';
+  });
+  const status = getStatus(sk.id);
+  let html = `<strong>${escHtml(sk.name)}</strong>`;
+  if (sk.description) html += `<br>${escHtml(sk.description)}`;
+  if (prereqs.length) html += `<br><em style="color:#8b949e">Requires: ${prereqs.map(escHtml).join(', ')}</em>`;
+  if (status==='achieved') html += `<br><span style="color:#ffd700">\u2605 Achieved</span>`;
+  else if (status==='available') html += `<br><span style="color:#58a6ff">\u25CB Available</span>`;
+  else html += `<br><span style="color:#666">\uD83D\uDD12 Locked</span>`;
+  tip.innerHTML = html;
+  tip.style.left = (e.clientX+16)+'px'; tip.style.top = (e.clientY+16)+'px';
+  tip.style.display = 'block';
+  tip._move = (ev) => { tip.style.left=(ev.clientX+16)+'px'; tip.style.top=(ev.clientY+16)+'px'; };
+  e.target.closest('.skill-node').addEventListener('mousemove', tip._move);
+}
+function hideTooltip(e) {
+  const tip = document.getElementById('tooltip');
+  tip.style.display = 'none';
+  if (tip._move) { e.target.closest('.skill-node')?.removeEventListener('mousemove', tip._move); tip._move=null; }
+}
+function escHtml(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+/* ════════════════════════════════════════════════════════
+   Toast
+   ════════════════════════════════════════════════════════ */
+let toastTimer;
+function toast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast-'+type; t.style.display='block'; t.style.opacity=1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{t.style.opacity=0; setTimeout(()=>{t.style.display='none'},300)}, 2400);
+}
+
+/* ════════════════════════════════════════════════════════
+   Modal
+   ════════════════════════════════════════════════════════ */
+let modalResolve = null, modalFields = [];
+
+function openModal(title, fields) {
+  modalFields = fields;
+  return new Promise(resolve => {
+    modalResolve = resolve;
+    document.getElementById('modal-title').textContent = title;
+    const body = document.getElementById('modal-body'); body.innerHTML = '';
+    for (const f of fields) {
+      const div = document.createElement('div'); div.className = 'modal-field';
+      const lbl = document.createElement('label'); lbl.textContent = f.label; div.appendChild(lbl);
+      let inp;
+      if (f.type === 'textarea') { inp = document.createElement('textarea'); inp.rows = 3; }
+      else if (f.type === 'select') {
+        inp = document.createElement('select');
+        (f.options||[]).forEach(o => { const opt = document.createElement('option'); opt.value=o.value; opt.textContent=o.label; inp.appendChild(opt); });
+      }
+      else { inp = document.createElement('input'); inp.type = f.type||'text'; }
+      inp.id = 'mf-'+f.id; inp.value = f.value||''; inp.placeholder = f.placeholder||'';
+      div.appendChild(inp); body.appendChild(div);
+    }
+    document.getElementById('modal-overlay').style.display = 'flex';
+    const first = body.querySelector('input,textarea,select'); if (first) setTimeout(()=>first.focus(),50);
+  });
+}
+function confirmModal() {
+  const vals = {};
+  modalFields.forEach(f => {
+    const el = document.getElementById('mf-'+f.id);
+    vals[f.id] = el ? el.value : '';
+  });
+  document.getElementById('modal-overlay').style.display = 'none';
+  if (modalResolve) { modalResolve(vals); modalResolve = null; }
+}
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  if (modalResolve) { modalResolve(null); modalResolve = null; }
+}
+
+/* ════════════════════════════════════════════════════════
+   User Actions
+   ════════════════════════════════════════════════════════ */
+function switchUser() {
+  const v = document.getElementById('user-select').value;
+  S.userId = v ? parseInt(v) : null;
+  S.teamProgressData = null; // clear team overlay when switching user
+  loadProgress().then(() => render());
+}
+
+/* ════════════════════════════════════════════════════════
+   Skillset Actions
+   ════════════════════════════════════════════════════════ */
+async function switchSkillset(id) {
+  S.ssId = id; S.selected = null; S.linkSrc = null;
+  await loadTree(); await loadProgress(); render(); updateDetail();
+  document.querySelectorAll('.btn-ss').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.btn-ss').forEach(b => {
+    const ss = S.skillsets.find(s => s.name === b.textContent);
+    if (ss && ss.id === id) b.classList.add('active');
+  });
+  fitView();
+}
+
+async function addSkillset() {
+  const vals = await openModal('New Skill Set', [
+    {id:'name',label:'Name',placeholder:'e.g. Stealth'},
+    {id:'description',label:'Description',type:'textarea',placeholder:'Optional description'}
+  ]);
+  if (!vals || !vals.name.trim()) return;
+  const r = await api('/api/skillsets', 'POST', {name:vals.name.trim(), description:vals.description||''});
+  if (r.ok) { const d = await r.json(); await loadSkillsets(); switchSkillset(d.id); toast('Skill set created!','success'); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function removeSkillset() {
+  if (!S.ssId) { toast('No skill set selected','warning'); return; }
+  const ss = S.skillsets.find(s=>s.id===S.ssId);
+  if (!confirm(`Delete skill set "${ss?.name}" and ALL its skills?`)) return;
+  await api(`/api/skillsets/${S.ssId}`, 'DELETE');
+  S.ssId = null; S.skills=[]; S.deps=[]; S.selected=null;
+  await loadSkillsets(); render(); updateDetail(); toast('Skill set removed','info');
+}
+
+/* ════════════════════════════════════════════════════════
+   Edit Mode
+   ════════════════════════════════════════════════════════ */
+function toggleEdit() {
+  S.edit = document.getElementById('edit-check').checked;
+  document.getElementById('edit-tools').style.display = S.edit ? 'block' : 'none';
+  if (!S.edit) { S.linking = false; S.linkSrc = null; S.selected = null; }
+  svgEl().style.cursor = S.linking ? 'crosshair' : 'grab';
+  render(); updateDetail();
+}
+
+function toggleLink() {
+  S.linking = !S.linking; S.linkSrc = null;
+  document.getElementById('link-btn').classList.toggle('active', S.linking);
+  document.getElementById('link-btn').style.background = S.linking ? '#1f6feb' : '';
+  document.getElementById('link-btn').style.color = S.linking ? '#fff' : '';
+  svgEl().style.cursor = S.linking ? 'crosshair' : 'grab';
+  toast(S.linking ? 'Click prerequisite skill first, then the dependent' : 'Link mode off', 'info');
+}
+
+async function addSkill() {
+  if (!S.ssId) { toast('Select a skill set first','warning'); return; }
+  const vals = await openModal('Add Skill', [
+    {id:'name',label:'Name',placeholder:'Skill name'},
+    {id:'description',label:'Description',type:'textarea',placeholder:'What does this skill do?'},
+    {id:'color',label:'Color',type:'color',value:'#58a6ff'}
+  ]);
+  if (!vals || !vals.name.trim()) return;
+  const center = {x: vb.x + vb.w/2, y: vb.y + vb.h/2};
+  const r = await api('/api/skills', 'POST', {
+    skillset_id:S.ssId, name:vals.name.trim(), description:vals.description||'',
+    x_pos:center.x, y_pos:center.y, color:vals.color
+  });
+  if (r.ok) { await reload(); toast('Skill added!','success'); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function editSkill() {
+  if (!S.selected) return;
+  const sk = S.skills.find(s => s.id===S.selected);
+  if (!sk) return;
+  const vals = await openModal('Edit Skill', [
+    {id:'name',label:'Name',value:sk.name},
+    {id:'description',label:'Description',type:'textarea',value:sk.description||''},
+    {id:'color',label:'Color',type:'color',value:sk.color||'#58a6ff'}
+  ]);
+  if (!vals) return;
+  await api(`/api/skills/${sk.id}`, 'PUT', {name:vals.name.trim()||sk.name, description:vals.description, color:vals.color});
+  await reload(); toast('Skill updated','success');
+}
+
+async function deleteSkill() {
+  if (!S.selected) return;
+  const sk = S.skills.find(s => s.id===S.selected);
+  if (!sk || !confirm(`Delete skill "${sk.name}"?`)) return;
+  await api(`/api/skills/${sk.id}`, 'DELETE');
+  S.selected = null; await reload(); updateDetail(); toast('Skill deleted','info');
+}
+
+/* ════════════════════════════════════════════════════════
+   Auto Layout
+   ════════════════════════════════════════════════════════ */
+function autoLayout() {
+  if (!S.skills.length) return;
+  const children = {}, hasParent = new Set();
+  S.deps.forEach(d => { (children[d.required_skill_id]||(children[d.required_skill_id]=[])).push(d.skill_id); hasParent.add(d.skill_id); });
+  const roots = S.skills.filter(s => !hasParent.has(s.id)).map(s=>s.id);
+  if (!roots.length) roots.push(S.skills[0].id);
+  const levels = {};
+  const q = [...roots]; roots.forEach(id => levels[id]=0);
+  while (q.length) {
+    const id = q.shift();
+    for (const cid of (children[id]||[])) {
+      const nl = levels[id]+1;
+      if (levels[cid]===undefined || nl>levels[cid]) { levels[cid]=nl; q.push(cid); }
+    }
+  }
+  S.skills.forEach(s => { if (levels[s.id]===undefined) levels[s.id]=0; });
+  const byLevel = {};
+  for (const [id,lv] of Object.entries(levels)) { (byLevel[lv]||(byLevel[lv]=[])).push(parseInt(id)); }
+  const startY=60, gap=120, svgW=700;
+  for (const [lv, ids] of Object.entries(byLevel)) {
+    const spacing = svgW/(ids.length+1);
+    ids.forEach((id,i) => {
+      const sk = S.skills.find(s=>s.id===id);
+      if (sk) { sk.x_pos = spacing*(i+1)+50; sk.y_pos = startY+parseInt(lv)*gap; }
+    });
+  }
+  const positions = S.skills.map(s=>({id:s.id, x_pos:s.x_pos, y_pos:s.y_pos}));
+  api('/api/skills/positions', 'PUT', positions);
+  render(); fitView(); toast('Layout applied','success');
+}
+
+/* ════════════════════════════════════════════════════════
+   Fit View
+   ════════════════════════════════════════════════════════ */
+function fitView() {
+  if (!S.skills.length) { vb={x:-50,y:-20,w:800,h:600}; updateVB(); return; }
+  const pad=100;
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+  S.skills.forEach(s => { x1=Math.min(x1,s.x_pos-80); y1=Math.min(y1,s.y_pos-30); x2=Math.max(x2,s.x_pos+80); y2=Math.max(y2,s.y_pos+30); });
+  vb.x=x1-pad; vb.y=y1-pad; vb.w=(x2-x1)+pad*2; vb.h=(y2-y1)+pad*2;
+  const s=svgEl(); if(!s.clientWidth) return;
+  const sr=s.clientWidth/s.clientHeight, vr=vb.w/vb.h;
+  if (vr>sr){const nh=vb.w/sr;vb.y-=(nh-vb.h)/2;vb.h=nh;}
+  else {const nw=vb.h*sr;vb.x-=(nw-vb.w)/2;vb.w=nw;}
+  updateVB(); render();
+}
+
+/* ════════════════════════════════════════════════════════
+   Reload Helper
+   ════════════════════════════════════════════════════════ */
+async function reload() {
+  await loadTree(); await loadProgress(); render();
+}
+
+/* ════════════════════════════════════════════════════════
+   Teams
+   ════════════════════════════════════════════════════════ */
+async function loadTeams() {
+  try {
+    const r = await api('/api/teams');
+    if (r.status === 401) { document.getElementById('teams-list').innerHTML = '<p style="color:#8b949e;font-size:13px">Login to see teams</p>'; return; }
+    S.teams = await r.json();
+    const wrap = document.getElementById('teams-list'); wrap.innerHTML = '';
+    if (!S.teams.length) { wrap.innerHTML = '<p style="color:#8b949e;font-size:13px">No teams yet</p>'; return; }
+    S.teams.forEach(t => {
+      const card = document.createElement('div'); card.className = 'team-card';
+      card.innerHTML = `<div class="tc-name">${escHtml(t.name)}</div><div class="tc-desc">${escHtml(t.description||'')}</div>`;
+      card.onclick = () => selectTeam(t.id);
+      wrap.appendChild(card);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function selectTeam(tid) {
+  S.selectedTeam = tid;
+  const team = S.teams.find(t => t.id === tid);
+  document.getElementById('team-detail-section').style.display = 'block';
+  document.getElementById('team-detail-name').textContent = team ? team.name : 'Team';
+  const r = await api(`/api/teams/${tid}/members`);
+  const members = await r.json();
+  const wrap = document.getElementById('team-members-list'); wrap.innerHTML = '';
+  members.forEach(m => {
+    const chip = document.createElement('span'); chip.className = 'member-chip';
+    const av = m.avatar_url ? `<img src="${escHtml(m.avatar_url)}">` : '';
+    chip.innerHTML = `${av} ${escHtml(m.name)} <small>(${m.role})</small>`;
+    wrap.appendChild(chip);
+  });
+}
+
+async function createTeam() {
+  if (!S.me) { toast('Login required', 'warning'); return; }
+  const vals = await openModal('Create Team', [
+    {id:'name',label:'Team Name',placeholder:'e.g. Monday Practice'},
+    {id:'description',label:'Description',type:'textarea',placeholder:'Optional'}
+  ]);
+  if (!vals || !vals.name.trim()) return;
+  const r = await api('/api/teams', 'POST', {name:vals.name.trim(), description:vals.description||''});
+  if (r.ok) { toast('Team created!','success'); loadTeams(); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function addMemberToTeam() {
+  if (!S.selectedTeam) return;
+  const opts = S.users.map(u => ({value:u.id, label:u.name}));
+  const vals = await openModal('Add Member', [
+    {id:'user_id', label:'User', type:'select', options:opts}
+  ]);
+  if (!vals) return;
+  const r = await api(`/api/teams/${S.selectedTeam}/members`, 'POST', {user_id:parseInt(vals.user_id)});
+  if (r.ok) { toast('Member added!','success'); selectTeam(S.selectedTeam); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function viewTeamProgress() {
+  if (!S.selectedTeam || !S.ssId) { toast('Select a team and a skill set first','warning'); return; }
+  const r = await api(`/api/teams/${S.selectedTeam}/progress`);
+  S.teamProgressData = await r.json();
+  render();
+  toast('Team heatmap overlay active. Switch user to clear.', 'info');
+}
+
+async function deleteSelectedTeam() {
+  if (!S.selectedTeam) return;
+  if (!confirm('Delete this team?')) return;
+  await api(`/api/teams/${S.selectedTeam}`, 'DELETE');
+  S.selectedTeam = null;
+  document.getElementById('team-detail-section').style.display = 'none';
+  loadTeams(); toast('Team deleted','info');
+}
+
+/* ════════════════════════════════════════════════════════
+   Training Sessions
+   ════════════════════════════════════════════════════════ */
+async function loadSessions() {
+  try {
+    const r = await api('/api/training-sessions');
+    if (r.status === 401) { document.getElementById('sessions-list').innerHTML = '<p style="color:#8b949e;font-size:13px">Login to see sessions</p>'; return; }
+    S.sessions = await r.json();
+    const wrap = document.getElementById('sessions-list'); wrap.innerHTML = '';
+    if (!S.sessions.length) { wrap.innerHTML = '<p style="color:#8b949e;font-size:13px">No sessions yet</p>'; return; }
+    S.sessions.forEach(s => {
+      const card = document.createElement('div'); card.className = 'session-card';
+      const dateStr = s.scheduled_date ? new Date(s.scheduled_date).toLocaleDateString() : 'No date';
+      card.innerHTML = `<div class="sc-title">${escHtml(s.title)}</div>
+        <div class="sc-date">${dateStr}</div>
+        ${s.team_name ? `<div class="sc-team">${escHtml(s.team_name)}</div>` : ''}
+        <div style="font-size:12px;color:#8b949e;margin-top:4px">${escHtml(s.description||'')}</div>`;
+      wrap.appendChild(card);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function createSession() {
+  if (!S.me) { toast('Login required', 'warning'); return; }
+  const teamOpts = [{value:'', label:'(No team)'}].concat(S.teams.map(t => ({value:t.id, label:t.name})));
+  const vals = await openModal('New Training Session', [
+    {id:'title',label:'Title',placeholder:'e.g. Tuesday keiko'},
+    {id:'description',label:'Description',type:'textarea',placeholder:'Focus areas, notes...'},
+    {id:'team_id',label:'Team',type:'select',options:teamOpts},
+    {id:'scheduled_date',label:'Date',type:'date'}
+  ]);
+  if (!vals || !vals.title.trim()) return;
+  const body = {title:vals.title.trim(), description:vals.description||''};
+  if (vals.team_id) body.team_id = parseInt(vals.team_id);
+  if (vals.scheduled_date) body.scheduled_date = vals.scheduled_date;
+  const r = await api('/api/training-sessions', 'POST', body);
+  if (r.ok) { toast('Session created!','success'); loadSessions(); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+/* ════════════════════════════════════════════════════════
+   Keyboard Shortcuts
+   ════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('modal-overlay').style.display==='flex') {
+    if (e.key==='Escape') closeModal();
+    if (e.key==='Enter') confirmModal();
+    return;
+  }
+  if (e.key==='e' && !e.ctrlKey && !e.altKey && document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='TEXTAREA') {
+    if (S.me && S.me.is_admin) { document.getElementById('edit-check').checked = !S.edit; toggleEdit(); }
+  }
+  if (e.key==='Escape') {
+    if (S.linking) toggleLink();
+    S.selected=null; render(); updateDetail();
+  }
+  if (e.key==='Delete' && S.edit && S.selected) deleteSkill();
+  if (e.key==='f' && !e.ctrlKey && document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='TEXTAREA') fitView();
+});
+
+/* ════════════════════════════════════════════════════════
+   Init
+   ════════════════════════════════════════════════════════ */
+async function init() {
+  initZoomPan();
+  updateVB();
+  await loadMe();
+  await loadUsers();
+  await loadSkillsets();
+  // Auto-select logged-in user in dropdown
+  if (S.userId) {
+    document.getElementById('user-select').value = S.userId;
+  }
+  if (S.skillsets.length) { await switchSkillset(S.skillsets[0].id); }
+  else render();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

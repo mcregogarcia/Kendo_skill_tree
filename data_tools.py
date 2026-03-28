@@ -1,48 +1,60 @@
-"""Export / Import skill_tree.db data as a SQL script.
+"""Export / Import skill_tree data as a SQL script (PostgreSQL version).
 
 Usage:
-    python data_tools.py export          # writes seed_data.sql
-    python data_tools.py import          # loads seed_data.sql into a fresh DB
+    python data_tools.py export          # writes seed_data.sql from PostgreSQL
+    python data_tools.py import          # loads seed_data.sql into PostgreSQL
 """
 
-import sqlite3
 import os
 import sys
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skill_tree.db")
+import psycopg2
+import psycopg2.extras
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SEED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed_data.sql")
 
 TABLES = ["users", "skillsets", "skills", "skill_dependencies", "user_skills"]
 
 
 def export_data():
-    if not os.path.exists(DB_PATH):
-        print("No database found. Nothing to export.")
+    if not DATABASE_URL:
+        print("Set DATABASE_URL environment variable first.")
         return
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    lines = ["-- Auto-generated seed data from skill_tree.db\n"]
+    lines = ["-- Auto-generated seed data from PostgreSQL\n"]
 
     for table in TABLES:
-        rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+        cur.execute(f"SELECT * FROM {table}")
+        rows = cur.fetchall()
         if not rows:
             continue
-        cols = rows[0].keys()
+        cols = list(rows[0].keys())
         lines.append(f"\n-- {table}")
         for row in rows:
             vals = []
-            for v in row:
+            for c in cols:
+                v = row[c]
                 if v is None:
                     vals.append("NULL")
                 elif isinstance(v, str):
                     vals.append("'" + v.replace("'", "''") + "'")
+                elif isinstance(v, bool):
+                    vals.append("TRUE" if v else "FALSE")
                 else:
                     vals.append(str(v))
             lines.append(
-                f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({','.join(vals)});"
+                f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join(vals)}) ON CONFLICT DO NOTHING;"
             )
+
+    # Reset sequences
+    lines.append("\n-- Reset sequences")
+    lines.append("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id),0) FROM users));")
+    lines.append("SELECT setval('skillsets_id_seq', (SELECT COALESCE(MAX(id),0) FROM skillsets));")
+    lines.append("SELECT setval('skills_id_seq', (SELECT COALESCE(MAX(id),0) FROM skills));")
 
     conn.close()
 
@@ -53,22 +65,27 @@ def export_data():
 
 
 def import_data():
+    if not DATABASE_URL:
+        print("Set DATABASE_URL environment variable first.")
+        return
+
     if not os.path.exists(SEED_PATH):
         print(f"No {SEED_PATH} found. Nothing to import.")
         return
 
-    # First, make sure tables exist by running init_db from app
+    # Make sure tables exist
     from app import init_db
     init_db()
 
     with open(SEED_PATH, "r", encoding="utf-8") as f:
         sql = f.read()
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.executescript(sql)
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute(sql)
     conn.commit()
     conn.close()
-    print("Imported seed data into skill_tree.db")
+    print("Imported seed data into PostgreSQL")
 
 
 if __name__ == "__main__":
