@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Tree</title>
+<style>
+/* ── Reset & Base ───────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d9;overflow:hidden;height:100vh;display:flex}
+::selection{background:#264f78}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#161b22}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+
+/* ── Sidebar ────────────────────────────────────────── */
+#sidebar{width:280px;min-width:280px;background:#161b22;border-right:1px solid #30363d;
+  padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+#sidebar h1{font-size:20px;color:#e6edf3;text-align:center;padding:8px 0;
+  border-bottom:1px solid #30363d;margin-bottom:4px}
+.section{background:#21262d;border-radius:8px;padding:12px;border:1px solid #30363d}
+.section h3{font-size:11px;text-transform:uppercase;color:#8b949e;
+  margin-bottom:8px;letter-spacing:1.2px;font-weight:600}
+
+/* ── Buttons ────────────────────────────────────────── */
+.btn{border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;
+  transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-primary{background:#238636;color:#fff}.btn-primary:hover{background:#2ea043}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn-secondary:hover{background:#30363d}
+.btn-danger{background:#da3633;color:#fff}.btn-danger:hover{background:#f85149}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+
+/* ── Skillset buttons ───────────────────────────────── */
+.btn-ss{background:#30363d;color:#8b949e;border:1px solid #444c56;border-radius:6px;
+  padding:6px 14px;font-size:13px;cursor:pointer;transition:all .15s;font-family:inherit}
+.btn-ss:hover{background:#3a424b;color:#c9d1d9}
+.btn-ss.active{background:#1f6feb;color:#fff;border-color:#1f6feb;box-shadow:0 0 8px #1f6feb55}
+#ss-btns{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ── Select ─────────────────────────────────────────── */
+select{width:100%;padding:6px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;
+  border-radius:6px;font-size:13px;font-family:inherit}
+select:focus{outline:none;border-color:#1f6feb}
+
+/* ── Edit Tools ─────────────────────────────────────── */
+#edit-tools{display:none}
+.edit-active #edit-tools{display:block}
+.edit-badge{display:inline-block;background:#da3633;color:#fff;font-size:10px;padding:2px 8px;
+  border-radius:10px;margin-left:8px;vertical-align:middle;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ── Toggle switch ──────────────────────────────────── */
+.toggle{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px}
+.toggle input{display:none}
+.toggle .slider{width:38px;height:20px;background:#30363d;border-radius:10px;
+  position:relative;transition:.2s}
+.toggle .slider::after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;
+  background:#8b949e;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:#1f6feb}
+.toggle input:checked+.slider::after{transform:translateX(18px);background:#fff}
+
+/* ── Detail panel ───────────────────────────────────── */
+#detail{display:none}
+#detail .detail-name{font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:6px}
+#detail .detail-desc{font-size:13px;color:#8b949e;margin-bottom:8px}
+#detail .detail-prereqs{font-size:12px;color:#8b949e;margin-bottom:4px}
+#detail .detail-status{font-size:12px;margin-bottom:10px;font-weight:600}
+.status-achieved{color:#ffd700}.status-available{color:#58a6ff}.status-locked{color:#666}
+
+/* ── Legend ──────────────────────────────────────────── */
+.legend-item{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px}
+.legend-dot{width:12px;height:12px;border-radius:50%;border:2px solid}
+.legend-dot.locked{background:#1a1a1a;border-color:#484f58}
+.legend-dot.available{background:#1a2332;border-color:#58a6ff}
+.legend-dot.achieved{background:#2d1f00;border-color:#ffd700;box-shadow:0 0 6px #ffd70088}
+
+/* ── Progress bar ───────────────────────────────────── */
+.progress-wrap{background:#0d1117;border-radius:6px;height:18px;overflow:hidden;border:1px solid #30363d}
+.progress-fill{height:100%;background:linear-gradient(90deg,#1f6feb,#ffd700);border-radius:6px;
+  transition:width .4s ease;min-width:0}
+#progress-text{font-size:12px;color:#8b949e;margin-top:4px;text-align:center}
+
+/* ── Main area ──────────────────────────────────────── */
+#main{flex:1;position:relative;overflow:hidden}
+#tree-svg{width:100%;height:100%;cursor:grab;display:block}
+#tree-svg:active{cursor:grabbing}
+#tree-svg.linking{cursor:crosshair}
+
+/* ── Empty state ────────────────────────────────────── */
+#empty-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;color:#484f58;font-size:16px;pointer-events:none}
+
+/* ── Toolbar float ──────────────────────────────────── */
+#toolbar{position:absolute;top:12px;right:12px;display:flex;gap:6px}
+
+/* ── Tooltip ────────────────────────────────────────── */
+#tooltip{display:none;position:fixed;background:#21262d;border:1px solid #30363d;
+  border-radius:8px;padding:10px 14px;font-size:13px;line-height:1.5;
+  max-width:260px;pointer-events:none;z-index:100;box-shadow:0 4px 12px #00000088}
+
+/* ── Toast ──────────────────────────────────────────── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  padding:10px 24px;border-radius:8px;font-size:14px;z-index:200;
+  transition:opacity .3s;pointer-events:none;font-weight:500}
+.toast-info{background:#1f6feb;color:#fff}
+.toast-success{background:#238636;color:#fff}
+.toast-warning{background:#9e6a03;color:#fff}
+.toast-error{background:#da3633;color:#fff}
+
+/* ── Modal ──────────────────────────────────────────── */
+#modal-overlay{display:none;position:fixed;inset:0;background:#00000088;z-index:300;
+  align-items:center;justify-content:center}
+#modal{background:#161b22;border:1px solid #30363d;border-radius:12px;
+  width:380px;max-width:90vw;box-shadow:0 8px 24px #00000088}
+#modal-header{display:flex;justify-content:space-between;align-items:center;
+  padding:16px 20px;border-bottom:1px solid #30363d}
+#modal-header h3{font-size:16px;color:#e6edf3}
+#modal-close{background:none;border:none;color:#8b949e;font-size:20px;cursor:pointer;
+  padding:4px 8px;border-radius:4px}.modal-close:hover{color:#c9d1d9}
+#modal-body{padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.modal-field{display:flex;flex-direction:column;gap:4px}
+.modal-field label{font-size:12px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.modal-field input,.modal-field textarea,.modal-field select{padding:8px 10px;background:#0d1117;
+  color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font-size:14px;font-family:inherit}
+.modal-field input:focus,.modal-field textarea:focus{outline:none;border-color:#1f6feb}
+.modal-field input[type="color"]{height:36px;padding:2px;cursor:pointer}
+#modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid #30363d}
+
+/* ── SVG node styles ────────────────────────────────── */
+.skill-node{cursor:pointer;transition:transform .1s}
+.skill-node:hover rect{filter:brightness(1.3)}
+.skill-node.selected rect{stroke-dasharray:6 3;animation:dash .6s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-18}}
+.connection{pointer-events:none;fill:none}
+.connection.editable{pointer-events:stroke;cursor:pointer;stroke-width:8}
+.connection.editable:hover{stroke:var(--hover-color,#f85149)!important;opacity:.8}
+</style>
+</head>
+
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────── -->
+<div id="sidebar">
+  <h1>&#9876; Skill Tree</h1>
+
+  <!-- Users -->
+  <div class="section">
+    <h3>User</h3>
+    <select id="user-select" onchange="switchUser()"><option value="">-- Select --</option></select>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" onclick="addUser()">+ Add</button>
+      <button class="btn btn-danger btn-sm" onclick="removeUser()">Remove</button>
+    </div>
+  </div>
+
+  <!-- Skillsets -->
+  <div class="section">
+    <h3>Skill Sets</h3>
+    <div id="ss-btns"></div>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn btn-primary btn-sm" onclick="addSkillset()">+ New Set</button>
+      <button class="btn btn-danger btn-sm" onclick="removeSkillset()">Remove Set</button>
+    </div>
+  </div>
+
+  <!-- Mode -->
+  <div class="section">
+    <label class="toggle" id="mode-toggle">
+      <input type="checkbox" id="edit-check" onchange="toggleEdit()">
+      <span class="slider"></span>
+      <span>Edit Mode</span>
+    </label>
+    <div id="edit-tools" style="margin-top:10px">
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="addSkill()">+ Skill</button>
+        <button class="btn btn-secondary btn-sm" id="link-btn" onclick="toggleLink()">&#128279; Link</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="autoLayout()">&#128208; Layout</button>
+        <button class="btn btn-secondary btn-sm" onclick="fitView()">&#128269; Fit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail -->
+  <div class="section" id="detail">
+    <h3>Selected Skill</h3>
+    <div class="detail-name" id="d-name"></div>
+    <div class="detail-desc" id="d-desc"></div>
+    <div class="detail-prereqs" id="d-prereqs"></div>
+    <div class="detail-status" id="d-status"></div>
+    <div class="btn-row" id="detail-edit-btns" style="display:none">
+      <button class="btn btn-secondary btn-sm" onclick="editSkill()">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSkill()">Delete</button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="section" id="progress-section">
+    <h3>Progress</h3>
+    <div class="progress-wrap"><div class="progress-fill" id="progress-fill" style="width:0"></div></div>
+    <div id="progress-text">0 / 0</div>
+  </div>
+
+  <!-- Legend -->
+  <div class="section">
+    <h3>Legend</h3>
+    <div class="legend-item"><span class="legend-dot locked"></span> Locked</div>
+    <div class="legend-item"><span class="legend-dot available"></span> Available</div>
+    <div class="legend-item"><span class="legend-dot achieved"></span> Achieved</div>
+  </div>
+</div>
+
+<!-- ── Main SVG area ────────────────────────────────── -->
+<div id="main">
+  <svg id="tree-svg">
+    <defs>
+      <marker id="arrow-grey" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6" fill="#484f58"/></marker>
+      <marker id="arrow-gold" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6" fill="#ffd700"/></marker>
+      <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6" fill="#58a6ff"/></marker>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#151b23" stroke-width="0.5"/>
+      </pattern>
+    </defs>
+    <g id="canvas"></g>
+  </svg>
+  <div id="empty-msg">Select a Skill Set to begin</div>
+</div>
+
+<!-- ── Tooltip ──────────────────────────────────────── -->
+<div id="tooltip"></div>
+
+<!-- ── Toast ────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ── Modal ────────────────────────────────────────── -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div id="modal-header">
+      <h3 id="modal-title">Dialog</h3>
+      <button id="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+    <div id="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm" onclick="confirmModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   State
+   ════════════════════════════════════════════════════════ */
+const S = {
+  users: [], skillsets: [], skills: [], deps: [], progress: {},
+  userId: null, ssId: null,
+  edit: false, linking: false, linkSrc: null, selected: null
+};
+
+/* ════════════════════════════════════════════════════════
+   SVG Helpers
+   ════════════════════════════════════════════════════════ */
+const NS = 'http://www.w3.org/2000/svg';
+const svg = () => document.getElementById('tree-svg');
+let vb = {x:-50, y:-20, w:800, h:600};
+let panning = false, panPt = null;
+let dragging = null, dragOff = {x:0,y:0};
+let dragMoved = false;
+
+function el(tag, attrs={}) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+function svgPt(e) {
+  const r = svg().getBoundingClientRect();
+  return {x: vb.x + (e.clientX-r.left)/r.width*vb.w, y: vb.y + (e.clientY-r.top)/r.height*vb.h};
+}
+function updateVB() { svg().setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+
+/* ════════════════════════════════════════════════════════
+   API Helper
+   ════════════════════════════════════════════════════════ */
+async function api(url, method='GET', body=null) {
+  const opts = {method, headers:{'Content-Type':'application/json'}};
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  return res;
+}
+
+/* ════════════════════════════════════════════════════════
+   Data Loading
+   ════════════════════════════════════════════════════════ */
+async function loadUsers() {
+  const r = await api('/api/users'); S.users = await r.json();
+  const sel = document.getElementById('user-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- Select --</option>';
+  S.users.forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id; o.textContent = u.name; sel.appendChild(o);
+  });
+  sel.value = cur || '';
+}
+
+async function loadSkillsets() {
+  const r = await api('/api/skillsets'); S.skillsets = await r.json();
+  const wrap = document.getElementById('ss-btns'); wrap.innerHTML = '';
+  S.skillsets.forEach(ss => {
+    const b = document.createElement('button');
+    b.className = 'btn-ss' + (S.ssId === ss.id ? ' active' : '');
+    b.textContent = ss.name;
+    b.onclick = () => switchSkillset(ss.id);
+    wrap.appendChild(b);
+  });
+}
+
+async function loadTree() {
+  if (!S.ssId) { S.skills=[]; S.deps=[]; return; }
+  const r = await api(`/api/skillsets/${S.ssId}/skills`);
+  const d = await r.json(); S.skills = d.skills; S.deps = d.dependencies;
+}
+
+async function loadProgress() {
+  S.progress = {};
+  if (!S.userId) return;
+  const r = await api(`/api/users/${S.userId}/progress`);
+  const d = await r.json();
+  for (const [id, date] of Object.entries(d)) S.progress[parseInt(id)] = date;
+}
+
+/* ════════════════════════════════════════════════════════
+   Status Helpers
+   ════════════════════════════════════════════════════════ */
+function getStatus(id) {
+  if (S.progress[id]) return 'achieved';
+  const myDeps = S.deps.filter(d => d.skill_id === id);
+  if (myDeps.length === 0) return 'available';
+  return myDeps.every(d => S.progress[d.required_skill_id]) ? 'available' : 'locked';
+}
+
+/* ════════════════════════════════════════════════════════
+   Rendering
+   ════════════════════════════════════════════════════════ */
+function render() {
+  const c = document.getElementById('canvas'); c.innerHTML = '';
+  document.getElementById('empty-msg').style.display = S.skills.length ? 'none' : 'block';
+
+  // Grid background
+  const bg = el('rect', {x:vb.x-2000, y:vb.y-2000, width:vb.w+4000, height:vb.h+4000, fill:'url(#grid)'});
+  c.appendChild(bg);
+
+  renderEdges(c);
+  renderNodes(c);
+  updateProgress();
+}
+
+function renderEdges(c) {
+  for (const dep of S.deps) {
+    const from = S.skills.find(s => s.id === dep.required_skill_id);
+    const to = S.skills.find(s => s.id === dep.skill_id);
+    if (!from || !to) continue;
+
+    const fromA = getStatus(from.id) === 'achieved';
+    const toA = getStatus(to.id) === 'achieved';
+    const bothDone = fromA && toA;
+    const anyDone = fromA || toA;
+
+    const midY = (from.y_pos + 25 + to.y_pos - 25) / 2;
+    const d = `M ${from.x_pos} ${from.y_pos+25} C ${from.x_pos} ${midY} ${to.x_pos} ${midY} ${to.x_pos} ${to.y_pos-25}`;
+
+    const stroke = bothDone ? '#ffd700' : anyDone ? '#58a6ff' : '#484f58';
+    const marker = bothDone ? 'url(#arrow-gold)' : anyDone ? 'url(#arrow-blue)' : 'url(#arrow-grey)';
+
+    const p = el('path', {d, stroke, 'stroke-width': bothDone?2.5:2, fill:'none', 'marker-end':marker, opacity: bothDone?1:anyDone?.8:.5});
+    p.classList.add('connection');
+
+    if (S.edit) {
+      p.classList.add('editable');
+      p.style.setProperty('--hover-color', '#f85149');
+      p.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Remove link: "${from.name}" → "${to.name}"?`)) {
+          api('/api/dependencies', 'DELETE', {skill_id:dep.skill_id, required_skill_id:dep.required_skill_id}).then(()=>reload());
+        }
+      });
+    }
+    c.appendChild(p);
+  }
+}
+
+function renderNodes(c) {
+  for (const sk of S.skills) {
+    const status = getStatus(sk.id);
+    const g = el('g', {transform:`translate(${sk.x_pos},${sk.y_pos})`});
+    g.classList.add('skill-node');
+    if (S.selected === sk.id) g.classList.add('selected');
+    g.dataset.id = sk.id;
+
+    const w = Math.max(130, sk.name.length * 8.5 + 30);
+
+    let fill, strokeCol, sw, filter='';
+    if (status === 'achieved') {
+      fill='#2d1f00'; strokeCol='#ffd700'; sw=3; filter='url(#glow)';
+    } else if (status === 'available') {
+      fill='#1a2332'; strokeCol = sk.color || '#58a6ff'; sw=2;
+    } else {
+      fill='#1a1a1a'; strokeCol='#484f58'; sw=1.5;
+    }
+
+    const rect = el('rect', {x:-w/2, y:-25, width:w, height:50, rx:10, fill, stroke:strokeCol, 'stroke-width':sw});
+    if (filter) rect.setAttribute('filter', filter);
+    g.appendChild(rect);
+
+    const txt = el('text', {'text-anchor':'middle', dy:'5', fill: status==='locked'?'#666':'#e0e0e0', 'font-size':'14', 'font-family':'Segoe UI,system-ui,sans-serif'});
+    txt.textContent = sk.name;
+    g.appendChild(txt);
+
+    // Small achieved checkmark
+    if (status === 'achieved') {
+      const ck = el('text', {x: w/2-14, y:-12, fill:'#ffd700', 'font-size':'14'});
+      ck.textContent = '★';
+      g.appendChild(ck);
+    }
+
+    g.addEventListener('mousedown', (e) => onNodeDown(e, sk.id));
+    g.addEventListener('mouseenter', (e) => showTooltip(e, sk));
+    g.addEventListener('mouseleave', hideTooltip);
+    c.appendChild(g);
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   Zoom & Pan
+   ════════════════════════════════════════════════════════ */
+function initZoomPan() {
+  const s = svg();
+  s.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const scale = e.deltaY > 0 ? 1.1 : 0.9;
+    const pt = svgPt(e);
+    vb.x = pt.x - (pt.x - vb.x) * scale;
+    vb.y = pt.y - (pt.y - vb.y) * scale;
+    vb.w *= scale; vb.h *= scale;
+    updateVB(); render();
+  }, {passive:false});
+
+  s.addEventListener('mousedown', (e) => {
+    if (e.target === s || e.target.closest('#canvas > rect')) {
+      panning = true; panPt = {x:e.clientX, y:e.clientY};
+      s.style.cursor = 'grabbing';
+      S.selected = null; updateDetail();
+    }
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (panning) {
+      const dx = (e.clientX - panPt.x) * vb.w / s.clientWidth;
+      const dy = (e.clientY - panPt.y) * vb.h / s.clientHeight;
+      vb.x -= dx; vb.y -= dy;
+      panPt = {x:e.clientX, y:e.clientY};
+      updateVB(); render();
+    }
+    if (dragging) {
+      dragMoved = true;
+      const pt = svgPt(e);
+      dragging.x_pos = pt.x - dragOff.x;
+      dragging.y_pos = pt.y - dragOff.y;
+      render();
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    if (panning) { panning = false; svg().style.cursor = S.linking?'crosshair':'grab'; }
+    if (dragging) {
+      if (!dragMoved) {
+        // Click without drag in edit mode → select the node
+        S.selected = (S.selected === dragging.id) ? null : dragging.id;
+        render(); updateDetail();
+      } else {
+        api(`/api/skills/${dragging.id}`, 'PUT', {x_pos:dragging.x_pos, y_pos:dragging.y_pos});
+      }
+      dragging = null;
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   Node Interaction
+   ════════════════════════════════════════════════════════ */
+function onNodeDown(e, id) {
+  e.stopPropagation();
+  dragMoved = false;
+  if (S.edit && !S.linking) {
+    const sk = S.skills.find(s => s.id===id);
+    const pt = svgPt(e);
+    dragging = sk; dragOff = {x: pt.x-sk.x_pos, y: pt.y-sk.y_pos};
+    return;
+  }
+  // Click handled on mouseup for non-drag
+  const handler = (ev) => {
+    window.removeEventListener('mouseup', handler);
+    if (dragMoved) return;
+    onNodeClick(ev, id);
+  };
+  window.addEventListener('mouseup', handler);
+}
+
+function onNodeClick(e, id) {
+  // Link mode
+  if (S.edit && S.linking) {
+    if (!S.linkSrc) {
+      S.linkSrc = id; S.selected = id; render(); updateDetail();
+      toast('Now click the dependent skill', 'info');
+    } else {
+      if (S.linkSrc !== id) {
+        api('/api/dependencies', 'POST', {skill_id:id, required_skill_id:S.linkSrc}).then(r => {
+          if (r.ok) { toast('Link created!', 'success'); reload(); }
+          else r.json().then(d => toast(d.error||'Error', 'error'));
+        });
+      }
+      S.linkSrc = null;
+    }
+    return;
+  }
+
+  // Edit mode: select
+  if (S.edit) {
+    S.selected = (S.selected === id) ? null : id;
+    render(); updateDetail();
+    return;
+  }
+
+  // Normal mode: toggle achievement
+  S.selected = id; render(); updateDetail();
+  if (!S.userId) { toast('Select a user first', 'warning'); return; }
+  const status = getStatus(id);
+  if (status === 'locked') { toast('Prerequisites not met!', 'warning'); return; }
+  api(`/api/users/${S.userId}/toggle/${id}`, 'POST').then(r => r.json()).then(d => {
+    if (d.achieved) { S.progress[id] = new Date().toISOString(); toast('Skill achieved! ★', 'success'); }
+    else { delete S.progress[id]; toast('Skill removed', 'info'); }
+    render(); updateDetail();
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   Sidebar Updates
+   ════════════════════════════════════════════════════════ */
+function updateDetail() {
+  const panel = document.getElementById('detail');
+  const editBtns = document.getElementById('detail-edit-btns');
+  if (!S.selected) { panel.style.display='none'; return; }
+  const sk = S.skills.find(s => s.id === S.selected);
+  if (!sk) { panel.style.display='none'; return; }
+  panel.style.display='block';
+
+  document.getElementById('d-name').textContent = sk.name;
+  document.getElementById('d-desc').textContent = sk.description || '(no description)';
+
+  const prereqs = S.deps.filter(d => d.skill_id===sk.id).map(d => {
+    const p = S.skills.find(s => s.id===d.required_skill_id); return p?p.name:'?';
+  });
+  document.getElementById('d-prereqs').textContent = prereqs.length ? 'Requires: '+prereqs.join(', ') : 'No prerequisites';
+
+  const status = getStatus(sk.id);
+  const statusEl = document.getElementById('d-status');
+  statusEl.textContent = status === 'achieved' ? '★ Achieved' : status === 'available' ? '○ Available' : '🔒 Locked';
+  statusEl.className = 'detail-status status-' + status;
+
+  editBtns.style.display = S.edit ? 'flex' : 'none';
+}
+
+function updateProgress() {
+  const total = S.skills.length;
+  const done = S.skills.filter(s => S.progress[s.id]).length;
+  const pct = total ? (done/total*100) : 0;
+  document.getElementById('progress-fill').style.width = pct+'%';
+  document.getElementById('progress-text').textContent = `${done} / ${total}`;
+}
+
+/* ════════════════════════════════════════════════════════
+   Tooltip
+   ════════════════════════════════════════════════════════ */
+function showTooltip(e, sk) {
+  const tip = document.getElementById('tooltip');
+  const prereqs = S.deps.filter(d => d.skill_id===sk.id).map(d => {
+    const p = S.skills.find(s => s.id===d.required_skill_id); return p?p.name:'?';
+  });
+  const status = getStatus(sk.id);
+  let html = `<strong>${escHtml(sk.name)}</strong>`;
+  if (sk.description) html += `<br>${escHtml(sk.description)}`;
+  if (prereqs.length) html += `<br><em style="color:#8b949e">Requires: ${prereqs.map(escHtml).join(', ')}</em>`;
+  if (status==='achieved') html += `<br><span style="color:#ffd700">★ Achieved</span>`;
+  else if (status==='available') html += `<br><span style="color:#58a6ff">○ Available</span>`;
+  else html += `<br><span style="color:#666">🔒 Locked</span>`;
+  tip.innerHTML = html;
+  tip.style.left = (e.clientX+16)+'px'; tip.style.top = (e.clientY+16)+'px';
+  tip.style.display = 'block';
+  // Track mouse
+  tip._move = (ev) => { tip.style.left=(ev.clientX+16)+'px'; tip.style.top=(ev.clientY+16)+'px'; };
+  e.target.closest('.skill-node').addEventListener('mousemove', tip._move);
+}
+function hideTooltip(e) {
+  const tip = document.getElementById('tooltip');
+  tip.style.display = 'none';
+  if (tip._move) { e.target.closest('.skill-node')?.removeEventListener('mousemove', tip._move); tip._move=null; }
+}
+function escHtml(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+/* ════════════════════════════════════════════════════════
+   Toast
+   ════════════════════════════════════════════════════════ */
+let toastTimer;
+function toast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast-'+type; t.style.display='block'; t.style.opacity=1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{t.style.opacity=0; setTimeout(()=>{t.style.display='none'},300)}, 2400);
+}
+
+/* ════════════════════════════════════════════════════════
+   Modal
+   ════════════════════════════════════════════════════════ */
+let modalResolve = null, modalFields = [];
+
+function openModal(title, fields) {
+  modalFields = fields;
+  return new Promise(resolve => {
+    modalResolve = resolve;
+    document.getElementById('modal-title').textContent = title;
+    const body = document.getElementById('modal-body'); body.innerHTML = '';
+    for (const f of fields) {
+      const div = document.createElement('div'); div.className = 'modal-field';
+      const lbl = document.createElement('label'); lbl.textContent = f.label; div.appendChild(lbl);
+      let inp;
+      if (f.type === 'textarea') { inp = document.createElement('textarea'); inp.rows = 3; }
+      else { inp = document.createElement('input'); inp.type = f.type||'text'; }
+      inp.id = 'mf-'+f.id; inp.value = f.value||''; inp.placeholder = f.placeholder||'';
+      div.appendChild(inp); body.appendChild(div);
+    }
+    document.getElementById('modal-overlay').style.display = 'flex';
+    const first = body.querySelector('input,textarea'); if (first) setTimeout(()=>first.focus(),50);
+  });
+}
+function confirmModal() {
+  const vals = {};
+  modalFields.forEach(f => vals[f.id] = document.getElementById('mf-'+f.id).value);
+  document.getElementById('modal-overlay').style.display = 'none';
+  if (modalResolve) { modalResolve(vals); modalResolve = null; }
+}
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  if (modalResolve) { modalResolve(null); modalResolve = null; }
+}
+
+/* ════════════════════════════════════════════════════════
+   User Actions
+   ════════════════════════════════════════════════════════ */
+function switchUser() {
+  const v = document.getElementById('user-select').value;
+  S.userId = v ? parseInt(v) : null;
+  loadProgress().then(() => render());
+}
+
+async function addUser() {
+  const vals = await openModal('Add User', [{id:'name',label:'Name',placeholder:'Username'}]);
+  if (!vals || !vals.name.trim()) return;
+  const r = await api('/api/users', 'POST', {name:vals.name.trim()});
+  if (r.ok) { const u = await r.json(); await loadUsers(); document.getElementById('user-select').value=u.id; switchUser(); toast('User added!','success'); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function removeUser() {
+  if (!S.userId) { toast('No user selected','warning'); return; }
+  const u = S.users.find(u=>u.id===S.userId);
+  if (!confirm(`Delete user "${u?.name}"?`)) return;
+  await api(`/api/users/${S.userId}`, 'DELETE');
+  S.userId = null; document.getElementById('user-select').value = '';
+  await loadUsers(); S.progress={}; render(); toast('User removed','info');
+}
+
+/* ════════════════════════════════════════════════════════
+   Skillset Actions
+   ════════════════════════════════════════════════════════ */
+async function switchSkillset(id) {
+  S.ssId = id; S.selected = null; S.linkSrc = null;
+  await loadTree(); await loadProgress(); render(); updateDetail();
+  // Update buttons
+  document.querySelectorAll('.btn-ss').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.btn-ss').forEach(b => {
+    const ss = S.skillsets.find(s => s.name === b.textContent);
+    if (ss && ss.id === id) b.classList.add('active');
+  });
+  fitView();
+}
+
+async function addSkillset() {
+  const vals = await openModal('New Skill Set', [
+    {id:'name',label:'Name',placeholder:'e.g. Stealth'},
+    {id:'description',label:'Description',type:'textarea',placeholder:'Optional description'}
+  ]);
+  if (!vals || !vals.name.trim()) return;
+  const r = await api('/api/skillsets', 'POST', {name:vals.name.trim(), description:vals.description||''});
+  if (r.ok) { const d = await r.json(); await loadSkillsets(); switchSkillset(d.id); toast('Skill set created!','success'); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function removeSkillset() {
+  if (!S.ssId) { toast('No skill set selected','warning'); return; }
+  const ss = S.skillsets.find(s=>s.id===S.ssId);
+  if (!confirm(`Delete skill set "${ss?.name}" and ALL its skills?`)) return;
+  await api(`/api/skillsets/${S.ssId}`, 'DELETE');
+  S.ssId = null; S.skills=[]; S.deps=[]; S.selected=null;
+  await loadSkillsets(); render(); updateDetail(); toast('Skill set removed','info');
+}
+
+/* ════════════════════════════════════════════════════════
+   Edit Mode
+   ════════════════════════════════════════════════════════ */
+function toggleEdit() {
+  S.edit = document.getElementById('edit-check').checked;
+  document.getElementById('edit-tools').style.display = S.edit ? 'block' : 'none';
+  if (!S.edit) { S.linking = false; S.linkSrc = null; S.selected = null; }
+  svg().style.cursor = S.linking ? 'crosshair' : 'grab';
+  render(); updateDetail();
+}
+
+function toggleLink() {
+  S.linking = !S.linking; S.linkSrc = null;
+  document.getElementById('link-btn').classList.toggle('active', S.linking);
+  document.getElementById('link-btn').style.background = S.linking ? '#1f6feb' : '';
+  document.getElementById('link-btn').style.color = S.linking ? '#fff' : '';
+  svg().style.cursor = S.linking ? 'crosshair' : 'grab';
+  toast(S.linking ? 'Click prerequisite skill first, then the dependent' : 'Link mode off', 'info');
+}
+
+async function addSkill() {
+  if (!S.ssId) { toast('Select a skill set first','warning'); return; }
+  const vals = await openModal('Add Skill', [
+    {id:'name',label:'Name',placeholder:'Skill name'},
+    {id:'description',label:'Description',type:'textarea',placeholder:'What does this skill do?'},
+    {id:'color',label:'Color',type:'color',value:'#58a6ff'}
+  ]);
+  if (!vals || !vals.name.trim()) return;
+  const center = {x: vb.x + vb.w/2, y: vb.y + vb.h/2};
+  const r = await api('/api/skills', 'POST', {
+    skillset_id:S.ssId, name:vals.name.trim(), description:vals.description||'',
+    x_pos:center.x, y_pos:center.y, color:vals.color
+  });
+  if (r.ok) { await reload(); toast('Skill added!','success'); }
+  else { const e = await r.json(); toast(e.error||'Error','error'); }
+}
+
+async function editSkill() {
+  if (!S.selected) return;
+  const sk = S.skills.find(s => s.id===S.selected);
+  if (!sk) return;
+  const vals = await openModal('Edit Skill', [
+    {id:'name',label:'Name',value:sk.name},
+    {id:'description',label:'Description',type:'textarea',value:sk.description||''},
+    {id:'color',label:'Color',type:'color',value:sk.color||'#58a6ff'}
+  ]);
+  if (!vals) return;
+  await api(`/api/skills/${sk.id}`, 'PUT', {name:vals.name.trim()||sk.name, description:vals.description, color:vals.color});
+  await reload(); toast('Skill updated','success');
+}
+
+async function deleteSkill() {
+  if (!S.selected) return;
+  const sk = S.skills.find(s => s.id===S.selected);
+  if (!sk || !confirm(`Delete skill "${sk.name}"?`)) return;
+  await api(`/api/skills/${sk.id}`, 'DELETE');
+  S.selected = null; await reload(); updateDetail(); toast('Skill deleted','info');
+}
+
+/* ════════════════════════════════════════════════════════
+   Auto Layout
+   ════════════════════════════════════════════════════════ */
+function autoLayout() {
+  if (!S.skills.length) return;
+  const children = {}, hasParent = new Set();
+  S.deps.forEach(d => { (children[d.required_skill_id]||(children[d.required_skill_id]=[])).push(d.skill_id); hasParent.add(d.skill_id); });
+  const roots = S.skills.filter(s => !hasParent.has(s.id)).map(s=>s.id);
+  if (!roots.length) roots.push(S.skills[0].id); // cycle fallback
+
+  const levels = {};
+  const q = [...roots]; roots.forEach(id => levels[id]=0);
+  while (q.length) {
+    const id = q.shift();
+    for (const cid of (children[id]||[])) {
+      const nl = levels[id]+1;
+      if (levels[cid]===undefined || nl>levels[cid]) { levels[cid]=nl; q.push(cid); }
+    }
+  }
+  // Unvisited nodes
+  S.skills.forEach(s => { if (levels[s.id]===undefined) levels[s.id]=0; });
+
+  const byLevel = {};
+  for (const [id,lv] of Object.entries(levels)) { (byLevel[lv]||(byLevel[lv]=[])).push(parseInt(id)); }
+
+  const startY=60, gap=120, svgW=700;
+  for (const [lv, ids] of Object.entries(byLevel)) {
+    const spacing = svgW/(ids.length+1);
+    ids.forEach((id,i) => {
+      const sk = S.skills.find(s=>s.id===id);
+      if (sk) { sk.x_pos = spacing*(i+1)+50; sk.y_pos = startY+parseInt(lv)*gap; }
+    });
+  }
+
+  // Save positions
+  const positions = S.skills.map(s=>({id:s.id, x_pos:s.x_pos, y_pos:s.y_pos}));
+  api('/api/skills/positions', 'PUT', positions);
+  render(); fitView(); toast('Layout applied','success');
+}
+
+/* ════════════════════════════════════════════════════════
+   Fit View
+   ════════════════════════════════════════════════════════ */
+function fitView() {
+  if (!S.skills.length) { vb={x:-50,y:-20,w:800,h:600}; updateVB(); return; }
+  const pad=100;
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+  S.skills.forEach(s => { x1=Math.min(x1,s.x_pos-80); y1=Math.min(y1,s.y_pos-30); x2=Math.max(x2,s.x_pos+80); y2=Math.max(y2,s.y_pos+30); });
+  vb.x=x1-pad; vb.y=y1-pad; vb.w=(x2-x1)+pad*2; vb.h=(y2-y1)+pad*2;
+  const s=svg(); if(!s.clientWidth) return;
+  const sr=s.clientWidth/s.clientHeight, vr=vb.w/vb.h;
+  if (vr>sr){const nh=vb.w/sr;vb.y-=(nh-vb.h)/2;vb.h=nh;}
+  else {const nw=vb.h*sr;vb.x-=(nw-vb.w)/2;vb.w=nw;}
+  updateVB(); render();
+}
+
+/* ════════════════════════════════════════════════════════
+   Reload Helper
+   ════════════════════════════════════════════════════════ */
+async function reload() {
+  await loadTree(); await loadProgress(); render();
+}
+
+/* ════════════════════════════════════════════════════════
+   Keyboard Shortcuts
+   ════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('modal-overlay').style.display==='flex') {
+    if (e.key==='Escape') closeModal();
+    if (e.key==='Enter') confirmModal();
+    return;
+  }
+  if (e.key==='e' && !e.ctrlKey && !e.altKey && document.activeElement.tagName!=='INPUT') {
+    document.getElementById('edit-check').checked = !S.edit; toggleEdit();
+  }
+  if (e.key==='Escape') {
+    if (S.linking) toggleLink();
+    S.selected=null; render(); updateDetail();
+  }
+  if (e.key==='Delete' && S.edit && S.selected) deleteSkill();
+  if (e.key==='f' && !e.ctrlKey && document.activeElement.tagName!=='INPUT') fitView();
+});
+
+/* ════════════════════════════════════════════════════════
+   Init
+   ════════════════════════════════════════════════════════ */
+async function init() {
+  initZoomPan();
+  updateVB();
+  await loadUsers();
+  await loadSkillsets();
+  // Auto-select first skillset
+  if (S.skillsets.length) { await switchSkillset(S.skillsets[0].id); }
+  else render();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
