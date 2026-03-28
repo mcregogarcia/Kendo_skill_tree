@@ -248,7 +248,8 @@ def discord_callback():
     }, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=10)
 
     if token_resp.status_code != 200:
-        return "Token exchange failed", 400
+        app.logger.error("Discord token exchange failed: %s %s", token_resp.status_code, token_resp.text)
+        return f"Token exchange failed: {token_resp.json().get('error_description', token_resp.text)}", 400
 
     access_token = token_resp.json().get("access_token")
 
