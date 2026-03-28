@@ -231,8 +231,10 @@ def discord_login():
 @app.route("/callback/discord")
 def discord_callback():
     # Validate state
-    if request.args.get("state") != session.pop("oauth_state", None):
-        return "Invalid state parameter", 400
+    expected_state = session.pop("oauth_state", None)
+    received_state = request.args.get("state")
+    if received_state != expected_state:
+        return f"Invalid state parameter (expected={expected_state!r}, got={received_state!r}). Your session may have expired — please try logging in again.", 400
 
     code = request.args.get("code")
     if not code:
@@ -249,7 +251,11 @@ def discord_callback():
 
     if token_resp.status_code != 200:
         app.logger.error("Discord token exchange failed: %s %s", token_resp.status_code, token_resp.text)
-        return f"Token exchange failed: {token_resp.json().get('error_description', token_resp.text)}", 400
+        try:
+            detail = token_resp.json().get('error_description', token_resp.text)
+        except Exception:
+            detail = token_resp.text
+        return f"Token exchange failed ({token_resp.status_code}): {detail}", 400
 
     access_token = token_resp.json().get("access_token")
 
@@ -321,6 +327,20 @@ def me():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/debug/config")
+def debug_config():
+    """Temporary debug endpoint to check config (remove after fixing)."""
+    return jsonify({
+        "DISCORD_CLIENT_ID_set": bool(DISCORD_CLIENT_ID),
+        "DISCORD_CLIENT_SECRET_set": bool(DISCORD_CLIENT_SECRET),
+        "DISCORD_CLIENT_SECRET_length": len(DISCORD_CLIENT_SECRET),
+        "DISCORD_REDIRECT_URI": DISCORD_REDIRECT_URI,
+        "SECRET_KEY_length": len(app.secret_key),
+        "DATABASE_URL_set": bool(DATABASE_URL),
+        "ADMIN_DISCORD_IDS": list(ADMIN_DISCORD_IDS),
+    })
 
 
 # ── Users ─────────────────────────────────────────────────────────────
