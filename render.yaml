@@ -8,7 +8,7 @@ services:
     name: kendo-skill-tree
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: python bot.py & gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
@@ -25,4 +25,8 @@ services:
       - key: DISCORD_REDIRECT_URI
         sync: false
       - key: ADMIN_DISCORD_IDS
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: WEB_APP_URL
         sync: false
