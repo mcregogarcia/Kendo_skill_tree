@@ -44,10 +44,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d
 .btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
 .btn-secondary:hover{background:#30363d}
 .btn-danger{background:#da3633;color:#fff}.btn-danger:hover{background:#f85149}
-.btn-discord{background:#5865F2;color:#fff;padding:8px 16px;font-size:14px;border-radius:8px;width:100%}
-.btn-discord:hover{background:#4752C4}
+.btn-login{background:#238636;color:#fff;padding:8px 16px;font-size:14px;border-radius:8px;width:100%}
+.btn-login:hover{background:#2ea043}
 .btn-sm{padding:4px 10px;font-size:12px}
 .btn-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+
+/* ── Auth form ──────────────────────────────────────── */
+.auth-input{width:100%;padding:8px 10px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;
+  border-radius:6px;font-size:14px;font-family:inherit;margin-bottom:8px}
+.auth-input:focus{outline:none;border-color:#1f6feb}
+.auth-error{color:#f85149;font-size:12px;margin-bottom:6px;display:none}
+.auth-toggle{font-size:12px;color:#58a6ff;cursor:pointer;text-align:center;margin-top:6px}
+.auth-toggle:hover{text-decoration:underline}
 
 /* ── Skillset buttons ───────────────────────────────── */
 .btn-ss{background:#30363d;color:#8b949e;border:1px solid #444c56;border-radius:6px;
@@ -195,14 +203,16 @@ select:focus{outline:none;border-color:#1f6feb}
   <!-- Auth section -->
   <div class="section" id="auth-section">
     <div id="logged-out-view">
-      <h3>Account</h3>
-      <a href="/login/discord" class="btn btn-discord" style="text-decoration:none;text-align:center">
-        &#x1F5E8; Login with Discord
-      </a>
+      <h3 id="auth-title">Login</h3>
+      <div class="auth-error" id="auth-error"></div>
+      <input class="auth-input" id="auth-username" type="text" placeholder="Username" maxlength="30" autocomplete="username">
+      <input class="auth-input" id="auth-password" type="password" placeholder="Password" maxlength="128" autocomplete="current-password">
+      <input class="auth-input" id="auth-name" type="text" placeholder="Display name (optional)" maxlength="50" style="display:none" autocomplete="name">
+      <button class="btn btn-login" id="auth-submit" onclick="submitAuth()">Login</button>
+      <div class="auth-toggle" id="auth-toggle" onclick="toggleAuthMode()">Don't have an account? Register</div>
     </div>
     <div id="logged-in-view" style="display:none">
       <div class="user-info">
-        <img id="my-avatar" src="" alt="avatar">
         <div>
           <div class="uname" id="my-name"></div>
           <div class="urole" id="my-role"></div>
@@ -366,7 +376,7 @@ select:focus{outline:none;border-color:#1f6feb}
    State
    ════════════════════════════════════════════════════════ */
 const S = {
-  me: null, // logged-in user {id, name, avatar_url, is_admin}
+  me: null, // logged-in user {id, name, is_admin}
   users: [], skillsets: [], skills: [], deps: [], progress: {},
   userId: null, ssId: null,
   edit: false, linking: false, linkSrc: null, selected: null,
@@ -438,8 +448,6 @@ async function loadMe() {
     document.getElementById('logged-in-view').style.display = 'block';
     document.getElementById('my-name').textContent = S.me.name;
     document.getElementById('my-role').textContent = S.me.is_admin ? 'Admin' : 'Member';
-    const av = document.getElementById('my-avatar');
-    av.src = S.me.avatar_url || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22><rect width=%2232%22 height=%2232%22 fill=%22%2330363d%22 rx=%2216%22/><text x=%2216%22 y=%2222%22 text-anchor=%22middle%22 fill=%22%238b949e%22 font-size=%2216%22>' + S.me.name[0] + '</text></svg>';
     // Show admin-only UI
     if (S.me.is_admin) {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
@@ -451,6 +459,58 @@ async function loadMe() {
     document.getElementById('logged-in-view').style.display = 'none';
   }
 }
+
+/* ════════════════════════════════════════════════════════
+   Auth (Register / Login)
+   ════════════════════════════════════════════════════════ */
+let authMode = 'login'; // 'login' or 'register'
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  document.getElementById('auth-title').textContent = authMode === 'login' ? 'Login' : 'Register';
+  document.getElementById('auth-submit').textContent = authMode === 'login' ? 'Login' : 'Register';
+  document.getElementById('auth-name').style.display = authMode === 'register' ? '' : 'none';
+  document.getElementById('auth-toggle').textContent =
+    authMode === 'login' ? "Don't have an account? Register" : "Already have an account? Login";
+  document.getElementById('auth-error').style.display = 'none';
+  document.getElementById('auth-password').autocomplete =
+    authMode === 'login' ? 'current-password' : 'new-password';
+}
+
+async function submitAuth() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const name = document.getElementById('auth-name').value.trim();
+  const errEl = document.getElementById('auth-error');
+  errEl.style.display = 'none';
+
+  if (!username || !password) {
+    errEl.textContent = 'Username and password are required';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const url = authMode === 'login' ? '/login' : '/register';
+  const body = {username, password};
+  if (authMode === 'register' && name) body.name = name;
+
+  const r = await api(url, 'POST', body);
+  const d = await r.json();
+  if (!r.ok) {
+    errEl.textContent = d.error || 'Something went wrong';
+    errEl.style.display = 'block';
+    return;
+  }
+  // Success — reload page
+  location.reload();
+}
+
+// Allow Enter key to submit
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.target.id === 'auth-username' || e.target.id === 'auth-password' || e.target.id === 'auth-name')) {
+    submitAuth();
+  }
+});
 
 /* ════════════════════════════════════════════════════════
    Data Loading
@@ -1068,8 +1128,7 @@ async function selectTeam(tid) {
   const wrap = document.getElementById('team-members-list'); wrap.innerHTML = '';
   members.forEach(m => {
     const chip = document.createElement('span'); chip.className = 'member-chip';
-    const av = m.avatar_url ? `<img src="${escHtml(m.avatar_url)}">` : '';
-    chip.innerHTML = `${av} ${escHtml(m.name)} <small>(${m.role})</small>`;
+    chip.innerHTML = `${escHtml(m.name)} <small>(${m.role})</small>`;
     wrap.appendChild(chip);
   });
 }
