@@ -28,6 +28,7 @@ ADMIN_DISCORD_IDS = set(
     if x.strip()
 )
 WEB_URL = os.environ.get("WEB_APP_URL", "")
+GUILD_ID = os.environ.get("DISCORD_GUILD_ID", "")
 
 # ── Database helper ───────────────────────────────────────────────────
 
@@ -94,9 +95,16 @@ class SkillTreeBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
 
     async def setup_hook(self):
-        await self.tree.sync()
+        # Global sync takes up to 1h; guild sync is instant.
+        # Sync to every guild the bot is in for immediate availability.
+        await self.tree.sync()  # global (for future servers)
 
     async def on_ready(self):
+        # Guild-specific sync is instant — do it for all joined guilds
+        for guild in self.guilds:
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            print(f"Synced commands to guild: {guild.name} ({guild.id})")
         print(f"Bot ready: {self.user}  •  {len(self.tree.get_commands())} commands synced")
 
 
