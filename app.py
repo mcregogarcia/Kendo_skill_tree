@@ -1,7 +1,7 @@
 """Kendo Skill Tree – RPG-style ability tracker with Flask + PostgreSQL.
 
 Features:
-  - Discord OAuth2 login
+  - Username / password login
   - Admin / regular user roles
   - Teams & training sessions
   - Persistent PostgreSQL storage
@@ -9,14 +9,14 @@ Features:
 
 import json as _json
 import os
+import re
 import secrets
 from datetime import datetime
 from functools import wraps
-from urllib.parse import urlencode
 
 import psycopg2
 import psycopg2.extras
-import requests as http_requests
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask import (
     Flask, render_template, jsonify, request,
     redirect, session, url_for, g,
@@ -28,12 +28,9 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 # ── Config ────────────────────────────────────────────────────────────
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
-DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
-DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "")
-# Comma-separated list of Discord user IDs that get admin on first login
-ADMIN_DISCORD_IDS = set(
-    x.strip() for x in os.environ.get("ADMIN_DISCORD_IDS", "").split(",") if x.strip()
+# Comma-separated list of usernames that get admin on registration
+ADMIN_USERNAMES = set(
+    x.strip().lower() for x in os.environ.get("ADMIN_USERNAMES", "").split(",") if x.strip()
 )
 
 # ── Database helpers ──────────────────────────────────────────────────
@@ -81,9 +78,9 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            discord_id TEXT UNIQUE,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
             name TEXT NOT NULL,
-            avatar_url TEXT DEFAULT '',
             is_admin BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         );
@@ -153,6 +150,30 @@ def init_db():
             PRIMARY KEY (session_id, user_id)
         );
     """)
+    # Migration: if upgrading from Discord OAuth schema, add new columns
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                           WHERE table_name='users' AND column_name='username') THEN
+                ALTER TABLE users ADD COLUMN username TEXT;
+                ALTER TABLE users ADD COLUMN password_hash TEXT;
+                -- Give existing users a placeholder username from their name
+                UPDATE users SET username = LOWER(REPLACE(name, ' ', '_'))
+                    WHERE username IS NULL;
+                UPDATE users SET password_hash = 'migrated_no_password'
+                    WHERE password_hash IS NULL;
+                ALTER TABLE users ALTER COLUMN username SET NOT NULL;
+                ALTER TABLE users ALTER COLUMN password_hash SET NOT NULL;
+                -- Add unique constraint if it doesn't exist
+                BEGIN
+                    ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username);
+                EXCEPTION WHEN duplicate_table THEN NULL;
+                END;
+            END IF;
+        END
+        $$;
+    """)
     conn.commit()
     conn.close()
 
@@ -207,100 +228,60 @@ def admin_required(f):
     return decorated
 
 
-# ── Discord OAuth2 ────────────────────────────────────────────────────
-
-DISCORD_API = "https://discord.com/api/v10"
-DISCORD_AUTH_URL = "https://discord.com/api/oauth2/authorize"
-DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
+# ── Registration & Login ──────────────────────────────────────────────
 
 
-@app.route("/login/discord")
-def discord_login():
-    state = secrets.token_urlsafe(16)
-    session["oauth_state"] = state
-    params = {
-        "client_id": DISCORD_CLIENT_ID,
-        "redirect_uri": DISCORD_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "identify",
-        "state": state,
-    }
-    return redirect(f"{DISCORD_AUTH_URL}?{urlencode(params)}")
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.get_json(force=True)
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    display_name = (data.get("name") or username).strip()
 
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+    if len(username) < 3 or len(username) > 30:
+        return jsonify({"error": "Username must be 3–30 characters"}), 400
+    if not re.match(r'^[a-zA-Z0-9_.-]+$', username):
+        return jsonify({"error": "Username: only letters, numbers, _ . -"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+    if len(display_name) > 50:
+        return jsonify({"error": "Display name too long"}), 400
 
-@app.route("/callback/discord")
-def discord_callback():
-    # Validate state
-    expected_state = session.pop("oauth_state", None)
-    received_state = request.args.get("state")
-    if received_state != expected_state:
-        return f"Invalid state parameter (expected={expected_state!r}, got={received_state!r}). Your session may have expired — please try logging in again.", 400
+    is_admin = username.lower() in ADMIN_USERNAMES
+    pw_hash = generate_password_hash(password)
 
-    code = request.args.get("code")
-    if not code:
-        return "Authorization failed", 400
-
-    # Exchange code for token
-    token_resp = http_requests.post(DISCORD_TOKEN_URL, data={
-        "client_id": DISCORD_CLIENT_ID,
-        "client_secret": DISCORD_CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": DISCORD_REDIRECT_URI,
-    }, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=10)
-
-    if token_resp.status_code != 200:
-        app.logger.error("Discord token exchange failed: %s %s", token_resp.status_code, token_resp.text)
-        try:
-            detail = token_resp.json().get('error_description', token_resp.text)
-        except Exception:
-            detail = token_resp.text
-        return f"Token exchange failed ({token_resp.status_code}): {detail}", 400
-
-    access_token = token_resp.json().get("access_token")
-
-    # Fetch Discord user info
-    user_resp = http_requests.get(f"{DISCORD_API}/users/@me", headers={
-        "Authorization": f"Bearer {access_token}",
-    }, timeout=10)
-
-    if user_resp.status_code != 200:
-        return "Failed to fetch user info", 400
-
-    d = user_resp.json()
-    discord_id = d["id"]
-    username = d.get("global_name") or d.get("username", "Unknown")
-    avatar_hash = d.get("avatar", "")
-
-    if avatar_hash:
-        avatar_url = f"https://cdn.discordapp.com/avatars/{discord_id}/{avatar_hash}.png?size=128"
-    else:
-        avatar_url = ""
-
-    is_admin = discord_id in ADMIN_DISCORD_IDS
-
-    # Upsert user
-    row = _exec("SELECT * FROM users WHERE discord_id = %s", (discord_id,), fetchone=True)
-    if row:
-        _exec(
-            "UPDATE users SET name = %s, avatar_url = %s WHERE discord_id = %s",
-            (username, avatar_url, discord_id), commit=True,
-        )
-        uid = row["id"]
-        # Promote to admin if in list and not already
-        if is_admin and not row["is_admin"]:
-            _exec("UPDATE users SET is_admin = TRUE WHERE id = %s", (uid,), commit=True)
-    else:
+    try:
         row = _exec(
-            "INSERT INTO users (discord_id, name, avatar_url, is_admin) "
+            "INSERT INTO users (username, password_hash, name, is_admin) "
             "VALUES (%s, %s, %s, %s) RETURNING id",
-            (discord_id, username, avatar_url, is_admin),
+            (username.lower(), pw_hash, display_name, is_admin),
             fetchone=True, commit=True,
         )
-        uid = row["id"]
+    except psycopg2.IntegrityError:
+        get_db().rollback()
+        return jsonify({"error": "Username already taken"}), 409
 
-    session["user_id"] = uid
-    return redirect("/")
+    session["user_id"] = row["id"]
+    return jsonify({"ok": True}), 201
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json(force=True)
+    username = (data.get("username") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+
+    row = _exec("SELECT * FROM users WHERE username = %s", (username,), fetchone=True)
+    if not row or not check_password_hash(row["password_hash"], password):
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    session["user_id"] = row["id"]
+    return jsonify({"ok": True})
 
 
 @app.route("/logout")
@@ -317,7 +298,7 @@ def me():
     return jsonify({
         "id": user["id"],
         "name": user["name"],
-        "avatar_url": user["avatar_url"],
+        "username": user["username"],
         "is_admin": user["is_admin"],
     })
 
@@ -329,25 +310,11 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/debug/config")
-def debug_config():
-    """Temporary debug endpoint to check config (remove after fixing)."""
-    return jsonify({
-        "DISCORD_CLIENT_ID_set": bool(DISCORD_CLIENT_ID),
-        "DISCORD_CLIENT_SECRET_set": bool(DISCORD_CLIENT_SECRET),
-        "DISCORD_CLIENT_SECRET_length": len(DISCORD_CLIENT_SECRET),
-        "DISCORD_REDIRECT_URI": DISCORD_REDIRECT_URI,
-        "SECRET_KEY_length": len(app.secret_key),
-        "DATABASE_URL_set": bool(DATABASE_URL),
-        "ADMIN_DISCORD_IDS": list(ADMIN_DISCORD_IDS),
-    })
-
-
 # ── Users ─────────────────────────────────────────────────────────────
 
 @app.route("/api/users")
 def get_users():
-    rows = _exec("SELECT id, name, avatar_url, is_admin FROM users ORDER BY name", fetch=True)
+    rows = _exec("SELECT id, name, is_admin FROM users ORDER BY name", fetch=True)
     return jsonify([dict(r) for r in rows])
 
 
@@ -355,17 +322,20 @@ def get_users():
 @admin_required
 def create_user():
     data = request.get_json(force=True)
-    name = (data.get("name") or "").strip()
-    if not name:
-        return jsonify({"error": "Name required"}), 400
+    username = (data.get("username") or "").strip().lower()
+    password = data.get("password") or ""
+    name = (data.get("name") or username).strip()
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+    pw_hash = generate_password_hash(password)
     try:
         row = _exec(
-            "INSERT INTO users (name) VALUES (%s) RETURNING id",
-            (name,), fetchone=True, commit=True,
+            "INSERT INTO users (username, password_hash, name) VALUES (%s, %s, %s) RETURNING id",
+            (username, pw_hash, name), fetchone=True, commit=True,
         )
     except psycopg2.IntegrityError:
         get_db().rollback()
-        return jsonify({"error": "User already exists"}), 409
+        return jsonify({"error": "Username already taken"}), 409
     return jsonify({"id": row["id"], "name": name}), 201
 
 
@@ -636,7 +606,7 @@ def delete_team(tid):
 @login_required
 def get_team_members(tid):
     rows = _exec(
-        "SELECT tm.*, u.name, u.avatar_url FROM team_members tm "
+        "SELECT tm.*, u.name FROM team_members tm "
         "JOIN users u ON u.id = tm.user_id WHERE tm.team_id = %s ORDER BY u.name",
         (tid,), fetch=True,
     )
@@ -693,7 +663,7 @@ def remove_team_member(tid, uid):
 def get_team_progress(tid):
     """Get aggregated progress for all team members across all skillsets."""
     members = _exec(
-        "SELECT u.id, u.name, u.avatar_url FROM team_members tm "
+        "SELECT u.id, u.name FROM team_members tm "
         "JOIN users u ON u.id = tm.user_id WHERE tm.team_id = %s",
         (tid,), fetch=True,
     )
@@ -707,7 +677,6 @@ def get_team_progress(tid):
         result.append({
             "user_id": m["id"],
             "name": m["name"],
-            "avatar_url": m["avatar_url"],
             "achieved": {str(s["skill_id"]): s["achieved_date"] for s in skills},
         })
     return jsonify(result)
